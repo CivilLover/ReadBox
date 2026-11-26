@@ -8,6 +8,10 @@ public struct SettingsView: View {
 
     public var body: some View {
         TabView {
+            AppearanceSettingsTab()
+                .environmentObject(appState)
+                .tabItem { Label("外观与玻璃", systemImage: "paintbrush.pointed.fill") }
+
             AISettingsTab()
                 .environmentObject(appState)
                 .tabItem { Label("AI 服务商", systemImage: "sparkles") }
@@ -27,7 +31,187 @@ public struct SettingsView: View {
             IntegrationsTodoTab()
                 .tabItem { Label("生态集成 (TODO)", systemImage: "puzzlepiece.extension") }
         }
-        .frame(width: 680, height: 510)
+        .frame(width: 700, height: 575)
+        .environment(\.readBoxGlassPreferences, appState.settings.liquidGlass)
+    }
+}
+
+private struct AppearanceSettingsTab: View {
+    @EnvironmentObject var appState: AppState
+
+    private var prefs: Binding<LiquidGlassPreferences> {
+        $appState.settings.liquidGlass
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Sticky Live Preview Card at top so adjustments are visible immediately without scrolling
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("实时预览", systemImage: "eye.fill")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    presetButton("标准玻璃", target: .standard)
+                    presetButton("通透晶莹", target: .crystalClear)
+                    presetButton("柔雾磨砂", target: .softFrosted)
+                    presetButton("极简纯色", target: .minimalSolid)
+                }
+
+                LiquidGlassLivePreviewCard(preferences: appState.settings.liquidGlass)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+
+            Divider()
+
+            Form {
+                Section("界面外观与液态玻璃材质") {
+                    Picker("外观模式", selection: prefs.appearance) {
+                        ForEach(AppAppearanceMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("玻璃材质风格", selection: prefs.materialStyle) {
+                        ForEach(LiquidGlassMaterialStyle.allCases, id: \.self) { style in
+                            Text(style.displayName).tag(style)
+                        }
+                    }
+
+                    Text(appState.settings.liquidGlass.materialStyle.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Toggle("收藏卡片启用玻璃半透明效果", isOn: prefs.cardTranslucent)
+                        .disabled(appState.settings.liquidGlass.materialStyle == .solid)
+                }
+
+                Section("背景氛围与折射光影") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("背景光晕主题")
+                            .font(.subheadline)
+                        HStack(spacing: 8) {
+                            ForEach(LiquidGlassAmbientTheme.allCases, id: \.self) { theme in
+                                let active = appState.settings.liquidGlass.ambientTheme == theme
+                                Button {
+                                    appState.settings.liquidGlass.ambientTheme = theme
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [theme.accentColor, theme.secondaryColor],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .frame(width: 13, height: 13)
+                                        Text(theme.displayName)
+                                            .font(.system(size: 11.5, weight: active ? .semibold : .regular))
+                                    }
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(active ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05))
+                                    .overlay(
+                                        Capsule().stroke(active ? Color.accentColor : Color.clear, lineWidth: 1.2)
+                                    )
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+
+                    sliderRow(
+                        title: "背景光晕强度",
+                        valueText: "\(Int(appState.settings.liquidGlass.ambientIntensity * 100))%",
+                        value: prefs.ambientIntensity,
+                        range: 0.0...1.5,
+                        step: 0.05
+                    )
+
+                    sliderRow(
+                        title: "玻璃着色浓度",
+                        valueText: appState.settings.liquidGlass.glassTintOpacity < 0.01 ? "无着色" : "\(Int(appState.settings.liquidGlass.glassTintOpacity * 100))%",
+                        value: prefs.glassTintOpacity,
+                        range: 0.0...0.35,
+                        step: 0.01
+                    )
+
+                    sliderRow(
+                        title: "玻璃边缘高光",
+                        valueText: "\(Int(appState.settings.liquidGlass.rimHighlightOpacity * 100))%",
+                        value: prefs.rimHighlightOpacity,
+                        range: 0.0...1.0,
+                        step: 0.05
+                    )
+                }
+
+                Section {
+                    HStack {
+                        Text("所有调整会实时生效于主窗口，并自动保存。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("恢复默认液态玻璃") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                appState.settings.liquidGlass = .standard
+                            }
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+        }
+        .onChange(of: appState.settings.liquidGlass) { _, _ in
+            appState.saveSettings()
+        }
+    }
+
+    private func presetButton(_ title: String, target: LiquidGlassPreferences) -> some View {
+        let isActive = appState.settings.liquidGlass.materialStyle == target.materialStyle
+            && abs(appState.settings.liquidGlass.ambientIntensity - target.ambientIntensity) < 0.06
+            && abs(appState.settings.liquidGlass.glassTintOpacity - target.glassTintOpacity) < 0.02
+            && appState.settings.liquidGlass.cardTranslucent == target.cardTranslucent
+        return Button(title) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                var next = target
+                next.appearance = appState.settings.liquidGlass.appearance
+                appState.settings.liquidGlass = next
+            }
+        }
+        .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 3.5)
+        .background(isActive ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
+        .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+        .clipShape(Capsule())
+        .buttonStyle(.plain)
+    }
+
+    private func sliderRow(
+        title: String,
+        valueText: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(valueText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Slider(value: value, in: range, step: step)
+        }
     }
 }
 

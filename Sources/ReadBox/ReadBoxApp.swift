@@ -36,13 +36,22 @@ struct ReadBoxApp: App {
             }
 
             CommandMenu("工作台") {
-                Button("快速查找 / 全文搜索") {
-                    appState.showQuickSearchOverlay.toggle()
+                Button("全局搜索 / 提问 AI") {
+                    if appState.showQuickSearchOverlay {
+                        appState.showQuickSearchOverlay = false
+                    } else {
+                        appState.openGlobalSearch(initialMode: .overview)
+                    }
                 }
                 .keyboardShortcut("k", modifiers: .command)
 
+                Button("提问 ReadBox AI") {
+                    appState.openGlobalSearch(initialMode: .aiAsk)
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+
                 Button("聚焦查找") {
-                    appState.showQuickSearchOverlay = true
+                    appState.openGlobalSearch(initialMode: .overview)
                 }
                 .keyboardShortcut("f", modifiers: .command)
 

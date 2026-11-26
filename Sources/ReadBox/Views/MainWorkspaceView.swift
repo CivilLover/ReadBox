@@ -55,9 +55,9 @@ public struct MainWorkspaceView: View {
             }
             .readBoxSeamlessToolbar()
 
-            // Centered Spotlight Quick Search Overlay
+            // Cubox-style Global Search & AI Search Overlay
             if appState.showQuickSearchOverlay {
-                QuickSearchOverlay()
+                GlobalSearchOverlay()
                     .transition(.opacity)
             }
 
@@ -89,6 +89,8 @@ public struct MainWorkspaceView: View {
                 .environmentObject(appState)
         }
         .frame(minWidth: 980, minHeight: 640)
+        .environment(\.readBoxGlassPreferences, appState.settings.liquidGlass)
+        .preferredColorScheme(appState.settings.liquidGlass.appearance.colorScheme)
     }
 }
 

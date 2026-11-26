@@ -219,6 +219,139 @@ public enum SidebarSortOrder: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum AppAppearanceMode: String, Codable, CaseIterable, Sendable {
+    case system = "system"
+    case light = "light"
+    case dark = "dark"
+
+    public var displayName: String {
+        switch self {
+        case .system: return "跟随系统"
+        case .light: return "浅色"
+        case .dark: return "深色"
+        }
+    }
+}
+
+public enum LiquidGlassMaterialStyle: String, Codable, CaseIterable, Sendable {
+    case regular = "regular"
+    case clear = "clear"
+    case frosted = "frosted"
+    case solid = "solid"
+
+    public var displayName: String {
+        switch self {
+        case .regular: return "标准液态玻璃"
+        case .clear: return "通透晶莹"
+        case .frosted: return "柔雾磨砂"
+        case .solid: return "极简纯色"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .regular: return "原生 macOS 液态折射玻璃，光影层次与可读性平衡"
+        case .clear: return "高通透清澈玻璃质感，更轻盈灵动"
+        case .frosted: return "经典细腻磨砂半透明，柔和护眼"
+        case .solid: return "去除玻璃折射，专注纯净阅读与内容本身"
+        }
+    }
+}
+
+public enum LiquidGlassAmbientTheme: String, Codable, CaseIterable, Sendable {
+    case ocean = "ocean"
+    case graphite = "graphite"
+    case aurora = "aurora"
+    case forest = "forest"
+    case warmPaper = "warmPaper"
+
+    public var displayName: String {
+        switch self {
+        case .ocean: return "极光海蓝"
+        case .graphite: return "静谧石墨"
+        case .aurora: return "紫霞微光"
+        case .forest: return "晨雾松绿"
+        case .warmPaper: return "暖阳米纸"
+        }
+    }
+}
+
+public struct LiquidGlassPreferences: Codable, Hashable, Sendable {
+    public var appearance: AppAppearanceMode
+    public var materialStyle: LiquidGlassMaterialStyle
+    public var ambientTheme: LiquidGlassAmbientTheme
+    public var glassTintOpacity: Double
+    public var ambientIntensity: Double
+    public var rimHighlightOpacity: Double
+    public var cardTranslucent: Bool
+
+    public init(
+        appearance: AppAppearanceMode = .system,
+        materialStyle: LiquidGlassMaterialStyle = .regular,
+        ambientTheme: LiquidGlassAmbientTheme = .ocean,
+        glassTintOpacity: Double = 0.0,
+        ambientIntensity: Double = 0.85,
+        rimHighlightOpacity: Double = 0.65,
+        cardTranslucent: Bool = true
+    ) {
+        self.appearance = appearance
+        self.materialStyle = materialStyle
+        self.ambientTheme = ambientTheme
+        self.glassTintOpacity = glassTintOpacity
+        self.ambientIntensity = ambientIntensity
+        self.rimHighlightOpacity = rimHighlightOpacity
+        self.cardTranslucent = cardTranslucent
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case appearance, materialStyle, ambientTheme
+        case glassTintOpacity, ambientIntensity, rimHighlightOpacity, cardTranslucent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.appearance = try c.decodeIfPresent(AppAppearanceMode.self, forKey: .appearance) ?? .system
+        self.materialStyle = try c.decodeIfPresent(LiquidGlassMaterialStyle.self, forKey: .materialStyle) ?? .regular
+        self.ambientTheme = try c.decodeIfPresent(LiquidGlassAmbientTheme.self, forKey: .ambientTheme) ?? .ocean
+        self.glassTintOpacity = try c.decodeIfPresent(Double.self, forKey: .glassTintOpacity) ?? 0.0
+        self.ambientIntensity = try c.decodeIfPresent(Double.self, forKey: .ambientIntensity) ?? 0.85
+        self.rimHighlightOpacity = try c.decodeIfPresent(Double.self, forKey: .rimHighlightOpacity) ?? 0.65
+        self.cardTranslucent = try c.decodeIfPresent(Bool.self, forKey: .cardTranslucent) ?? true
+    }
+
+    public static let standard = LiquidGlassPreferences()
+
+    public static let crystalClear = LiquidGlassPreferences(
+        appearance: .system,
+        materialStyle: .clear,
+        ambientTheme: .ocean,
+        glassTintOpacity: 0.06,
+        ambientIntensity: 1.15,
+        rimHighlightOpacity: 0.85,
+        cardTranslucent: true
+    )
+
+    public static let softFrosted = LiquidGlassPreferences(
+        appearance: .system,
+        materialStyle: .frosted,
+        ambientTheme: .graphite,
+        glassTintOpacity: 0.04,
+        ambientIntensity: 0.55,
+        rimHighlightOpacity: 0.50,
+        cardTranslucent: true
+    )
+
+    public static let minimalSolid = LiquidGlassPreferences(
+        appearance: .system,
+        materialStyle: .solid,
+        ambientTheme: .graphite,
+        glassTintOpacity: 0.0,
+        ambientIntensity: 0.0,
+        rimHighlightOpacity: 0.25,
+        cardTranslucent: false
+    )
+}
+
 public struct AppSettings: Codable, Sendable {
     public var vaultPath: String
     public var activeProviderId: String
@@ -232,6 +365,7 @@ public struct AppSettings: Codable, Sendable {
     public var defaultSynthesisTemplateId: String
     public var folderSortOrder: SidebarSortOrder
     public var tagSortOrder: SidebarSortOrder
+    public var liquidGlass: LiquidGlassPreferences
 
     public init(
         vaultPath: String,
@@ -250,7 +384,8 @@ public struct AppSettings: Codable, Sendable {
         synthesisTemplates: [SynthesisPromptTemplate] = SynthesisPromptTemplate.builtInPresets,
         defaultSynthesisTemplateId: String = "tpl-knowledge-system",
         folderSortOrder: SidebarSortOrder = .custom,
-        tagSortOrder: SidebarSortOrder = .custom
+        tagSortOrder: SidebarSortOrder = .custom,
+        liquidGlass: LiquidGlassPreferences = LiquidGlassPreferences()
     ) {
         self.vaultPath = vaultPath
         self.activeProviderId = activeProviderId
@@ -264,13 +399,14 @@ public struct AppSettings: Codable, Sendable {
         self.defaultSynthesisTemplateId = defaultSynthesisTemplateId
         self.folderSortOrder = folderSortOrder
         self.tagSortOrder = tagSortOrder
+        self.liquidGlass = liquidGlass
     }
 
     enum CodingKeys: String, CodingKey {
         case vaultPath, activeProviderId, activeModelName, providers, reader
         case clipboardMonitorEnabled, autoInsightOnSave, customQuickPrompts
         case synthesisTemplates, defaultSynthesisTemplateId
-        case folderSortOrder, tagSortOrder
+        case folderSortOrder, tagSortOrder, liquidGlass
     }
 
     public init(from decoder: Decoder) throws {
@@ -292,6 +428,7 @@ public struct AppSettings: Codable, Sendable {
         self.defaultSynthesisTemplateId = try c.decodeIfPresent(String.self, forKey: .defaultSynthesisTemplateId) ?? "tpl-knowledge-system"
         self.folderSortOrder = try c.decodeIfPresent(SidebarSortOrder.self, forKey: .folderSortOrder) ?? .custom
         self.tagSortOrder = try c.decodeIfPresent(SidebarSortOrder.self, forKey: .tagSortOrder) ?? .custom
+        self.liquidGlass = try c.decodeIfPresent(LiquidGlassPreferences.self, forKey: .liquidGlass) ?? LiquidGlassPreferences()
     }
 
     public var activeProvider: AIProviderProfile {

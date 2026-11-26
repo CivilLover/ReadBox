@@ -115,4 +115,89 @@ final class ReadBoxTests: XCTestCase {
         XCTAssertTrue(SiteCookieManager.domainMatches(cookieDomain: "mp.weixin.qq.com", requestHost: "mp.weixin.qq.com"))
         XCTAssertFalse(SiteCookieManager.domainMatches(cookieDomain: "zhihu.com", requestHost: "notzhihu.com"))
     }
+
+    func testLiquidGlassPreferencesRoundtripAndLegacySettingsDecode() throws {
+        var settings = AppSettings(vaultPath: "/tmp/readbox-test")
+        settings.liquidGlass = LiquidGlassPreferences(
+            appearance: .dark,
+            materialStyle: .clear,
+            ambientTheme: .aurora,
+            glassTintOpacity: 0.14,
+            ambientIntensity: 1.2,
+            rimHighlightOpacity: 0.8,
+            cardTranslucent: false
+        )
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertEqual(decoded.liquidGlass, settings.liquidGlass)
+
+        // Legacy settings JSON without liquidGlass key should decode with default values
+        let legacyJSON = #"{"vaultPath":"/tmp/legacy","activeProviderId":"deepseek"}"#.data(using: .utf8)!
+        let legacyDecoded = try JSONDecoder().decode(AppSettings.self, from: legacyJSON)
+        XCTAssertEqual(legacyDecoded.liquidGlass, LiquidGlassPreferences.standard)
+    }
+
+    @MainActor
+    func testGlobalSearchAcrossFoldersClipsHighlightsAndArchive() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ReadBoxGlobalSearchTest-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let state = AppState(vaultPath: tempDir.path, persistSettings: false)
+        state.createFolder(name: "电影美学", emoji: "🎬")
+
+        let activeHighlight = HighlightItem(
+            clipId: "clip-movie-1",
+            quote: "电影的世界，好像在渐渐消失。",
+            note: "关于胶片时代电影的感叹",
+            color: .blue
+        )
+        let activeClip = ClipItem(
+            id: "clip-movie-1",
+            relativeDir: state.vault.makeRelativeClipDir(title: "梦回 1994", id: "clip-movie-1"),
+            title: "梦回 1994",
+            excerpt: "电影的世界，好像在渐渐消失。",
+            domain: "douban.com",
+            tags: ["电影", "影评"],
+            isArchived: false,
+            highlights: [activeHighlight]
+        )
+        let archivedClip = ClipItem(
+            id: "clip-movie-archived",
+            relativeDir: state.vault.makeRelativeClipDir(title: "归档电影笔记", id: "clip-movie-archived"),
+            title: "归档电影笔记",
+            excerpt: "这是一篇已经归档的经典电影拉片记录。",
+            domain: "readbox.local",
+            tags: ["归档"],
+            isArchived: true
+        )
+
+        try state.vault.saveClip(
+            activeClip,
+            articleHTML: "<p>电影的世界，好像在渐渐消失。1994年是影史奇迹之年。</p>",
+            articleMarkdown: "电影的世界，好像在渐渐消失。1994年是影史奇迹之年。",
+            snapshotHTML: "<p>快照</p>",
+            noteMarkdown: "重温 1994 电影"
+        )
+        try state.vault.saveClip(
+            archivedClip,
+            articleHTML: "<p>这是一篇已经归档的经典电影拉片记录。</p>",
+            articleMarkdown: "这是一篇已经归档的经典电影拉片记录。",
+            snapshotHTML: "<p>快照</p>",
+            noteMarkdown: ""
+        )
+        state.reloadVaultData()
+
+        let snap = state.runGlobalSearch(query: "电影")
+        XCTAssertTrue(snap.matchingFolders.contains(where: { $0.name == "电影美学" }))
+        XCTAssertTrue(snap.matchingTags.contains(where: { $0.tag.name == "电影" }))
+        XCTAssertTrue(snap.activeClipHits.contains(where: { $0.clip.id == "clip-movie-1" }))
+        XCTAssertFalse(snap.activeClipHits.contains(where: { $0.clip.id == "clip-movie-archived" }))
+        XCTAssertTrue(snap.archivedClipHits.contains(where: { $0.clip.id == "clip-movie-archived" }))
+        XCTAssertTrue(snap.highlightHits.contains(where: { $0.highlight.id == activeHighlight.id }))
+
+        let fullTextSnap = state.runGlobalSearch(query: "影史奇迹")
+        XCTAssertTrue(fullTextSnap.fullTextClipHits.contains(where: { $0.clip.id == "clip-movie-1" }))
+    }
 }

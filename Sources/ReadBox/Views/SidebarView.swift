@@ -177,7 +177,7 @@ public struct SidebarView: View {
             .padding(.bottom, 10)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     appState.quickAddPrefillURL = ""
                     appState.showQuickAddSheet = true
@@ -186,6 +186,14 @@ public struct SidebarView: View {
                         .font(.system(size: 14, weight: .bold))
                 }
                 .help("快速添加链接 (⌘N)")
+
+                Button {
+                    appState.openGlobalSearch()
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13.5, weight: .semibold))
+                }
+                .help("全局搜索 / 提问 ReadBox AI (⌘K)")
             }
         }
         .popover(isPresented: $showNewFolderPopover) {

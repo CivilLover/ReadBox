@@ -328,9 +328,7 @@ public struct AnnotationsView: View {
                                 }
                             }
                             .padding(14)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.07), lineWidth: 1))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .readBoxGlassCard(cornerRadius: 12, isSelected: false, isHovered: false)
                             .onTapGesture {
                                 appState.activeClipId = pair.clip.id
                                 appState.pendingScrollToHighlightId = pair.highlight.id
@@ -341,6 +339,6 @@ public struct AnnotationsView: View {
                 }
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(LiquidGlassCanvasBackground())
     }
 }

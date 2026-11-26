@@ -152,28 +152,6 @@ public struct LibraryContentView: View {
 
                 Spacer()
 
-                // Liquid Glass Spotlight Search Capsule
-                Button {
-                    appState.showQuickSearchOverlay = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 12, weight: .medium))
-                        Text("快速查找")
-                            .font(.system(size: 12.5))
-                        Spacer()
-                        Text("⌘K")
-                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 7)
-                    .frame(width: 215)
-                    .readBoxGlassSurface(in: Capsule(), interactive: true)
-                }
-                .buttonStyle(.plain)
-
                 // Crystal-clear Liquid Glass Quick Add Capsule
                 Button {
                     appState.quickAddPrefillURL = ""
@@ -680,21 +658,7 @@ public struct ClipCardView: View {
         }
         .padding(14)
         .frame(height: 160)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    isSelected
-                    ? AnyShapeStyle(Color.accentColor)
-                    : AnyShapeStyle(LinearGradient(
-                        colors: [.white.opacity(isHovered ? 0.38 : 0.2), .white.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )),
-                    lineWidth: isSelected ? 2 : 1
-                )
-        )
-        .shadow(color: .black.opacity(isHovered ? 0.14 : 0.05), radius: isHovered ? 12 : 4, y: isHovered ? 4 : 2)
+        .readBoxGlassCard(cornerRadius: 16, isSelected: isSelected, isHovered: isHovered)
         .scaleEffect(isHovered ? 1.008 : 1.0)
         .animation(.easeOut(duration: 0.16), value: isHovered)
     }
@@ -748,8 +712,6 @@ public struct ClipListRowView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.14)) : AnyShapeStyle(.ultraThinMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.14), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .readBoxGlassCard(cornerRadius: 12, isSelected: isSelected, isHovered: false)
     }
 }

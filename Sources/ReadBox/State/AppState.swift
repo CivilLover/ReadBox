@@ -34,6 +34,60 @@ public enum RightPanelTab: String, CaseIterable {
     case highlights = "标注"
 }
 
+public enum GlobalSearchMode: Hashable {
+    case overview
+    case allResults
+    case fullText
+    case annotations
+    case archived
+    case aiAsk
+}
+
+public struct GlobalSearchClipHit: Identifiable, Hashable {
+    public var id: String { clip.id }
+    public var clip: ClipItem
+    public var snippet: String
+    public var isFullTextMatch: Bool
+}
+
+public struct GlobalSearchHighlightHit: Identifiable, Hashable {
+    public var id: String { highlight.id }
+    public var clip: ClipItem
+    public var highlight: HighlightItem
+}
+
+public struct GlobalSearchKnowledgeHit: Identifiable, Hashable {
+    public var id: String { doc.id }
+    public var doc: KnowledgeDoc
+    public var snippet: String
+}
+
+public struct GlobalSearchSnapshot {
+    public var query: String
+    public var matchingFolders: [FolderItem]
+    public var matchingTags: [(tag: TagItem, count: Int)]
+    public var activeClipHits: [GlobalSearchClipHit]
+    public var fullTextClipHits: [GlobalSearchClipHit]
+    public var highlightHits: [GlobalSearchHighlightHit]
+    public var archivedClipHits: [GlobalSearchClipHit]
+    public var knowledgeHits: [GlobalSearchKnowledgeHit]
+
+    public var totalResultCount: Int {
+        matchingFolders.count + matchingTags.count + activeClipHits.count + highlightHits.count + knowledgeHits.count + archivedClipHits.count
+    }
+
+    public static let empty = GlobalSearchSnapshot(
+        query: "",
+        matchingFolders: [],
+        matchingTags: [],
+        activeClipHits: [],
+        fullTextClipHits: [],
+        highlightHits: [],
+        archivedClipHits: [],
+        knowledgeHits: []
+    )
+}
+
 @MainActor
 public final class AppState: ObservableObject {
     public let vault: VaultManager
@@ -68,6 +122,7 @@ public final class AppState: ObservableObject {
     @Published public var showQuickAddSheet: Bool = false
     @Published public var quickAddPrefillURL: String = ""
     @Published public var showQuickSearchOverlay: Bool = false
+    @Published public var quickSearchInitialMode: GlobalSearchMode = .overview
     @Published public var showSynthesisSheet: Bool = false
     @Published public var synthesisTargetClipIds: [String] = []
 
@@ -86,17 +141,25 @@ public final class AppState: ObservableObject {
     @Published public var isClipping: Bool = false
     @Published public var toastMessage: String? = nil
     private var toastTask: Task<Void, Never>?
+    private let persistSettings: Bool
 
-    public init() {
-        let initialVault = VaultManager()
-        let loadedSettings = initialVault.loadSettings()
-        if loadedSettings.vaultPath != initialVault.vaultURL.path {
-            initialVault.switchVault(to: URL(fileURLWithPath: loadedSettings.vaultPath, isDirectory: true))
+    public init(vaultPath: String? = nil, persistSettings: Bool = true) {
+        self.persistSettings = persistSettings
+        let initialVault = VaultManager(vaultPath: vaultPath)
+        let loadedSettings: AppSettings
+        if persistSettings {
+            let loaded = initialVault.loadSettings()
+            if vaultPath == nil && loaded.vaultPath != initialVault.vaultURL.path {
+                initialVault.switchVault(to: URL(fileURLWithPath: loaded.vaultPath, isDirectory: true))
+            }
+            loadedSettings = loaded
+        } else {
+            loadedSettings = AppSettings(vaultPath: initialVault.vaultURL.path, clipboardMonitorEnabled: false)
         }
         self.vault = initialVault
         self.settings = loadedSettings
         self.reloadVaultData()
-        if loadedSettings.clipboardMonitorEnabled {
+        if persistSettings && loadedSettings.clipboardMonitorEnabled {
             self.clipboardMonitor.start()
         }
     }
@@ -131,8 +194,10 @@ public final class AppState: ObservableObject {
     }
 
     public func saveSettings() {
-        vault.saveSettings(settings)
-        if settings.clipboardMonitorEnabled {
+        if persistSettings {
+            vault.saveSettings(settings)
+        }
+        if persistSettings && settings.clipboardMonitorEnabled {
             clipboardMonitor.start()
         } else {
             clipboardMonitor.stop()
@@ -142,7 +207,9 @@ public final class AppState: ObservableObject {
     public func switchVaultDirectory(to url: URL) {
         vault.switchVault(to: url)
         settings.vaultPath = url.path
-        vault.saveSettings(settings)
+        if persistSettings {
+            vault.saveSettings(settings)
+        }
         activeClipId = nil
         activeKnowledgeDocId = nil
         reloadVaultData()
@@ -860,6 +927,234 @@ public final class AppState: ObservableObject {
 
             请基于上述收藏资料回答，引用观点时注明 `[来源N]` 与文章标题。
             """
+        }
+    }
+
+    // MARK: - Global Search & AI Search Engine
+
+    public func openGlobalSearch(initialMode: GlobalSearchMode = .overview) {
+        quickSearchInitialMode = initialMode
+        showQuickSearchOverlay = true
+    }
+
+    /// Unified global search across folders, tags, active collections, full-text articles,
+    /// highlights/annotations, knowledge base docs, and archived clips.
+    public func runGlobalSearch(query rawQuery: String) -> GlobalSearchSnapshot {
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return .empty }
+
+        let matchingFolders = folders.filter {
+            $0.name.localizedCaseInsensitiveContains(query) || $0.emoji.contains(query)
+        }
+
+        let matchingTags = allTagsWithCount.filter {
+            $0.tag.name.localizedCaseInsensitiveContains(query)
+        }
+
+        let clipById = Dictionary(uniqueKeysWithValues: clips.map { ($0.id, $0) })
+        let ftsClipHits = vault.searchDB.search(query: query, kindFilter: .clip, limit: 100)
+        var ftsSnippetByClipId: [String: String] = [:]
+        for hit in ftsClipHits {
+            let cleaned = hit.snippet
+                .replacingOccurrences(of: "【", with: "")
+                .replacingOccurrences(of: "】", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.isEmpty {
+                ftsSnippetByClipId[hit.targetId] = cleaned
+            }
+        }
+
+        var activeHits: [GlobalSearchClipHit] = []
+        var seenActive = Set<String>()
+        var archivedHits: [GlobalSearchClipHit] = []
+        var seenArchived = Set<String>()
+
+        // 1. Prioritize direct title / excerpt / tag / author / domain matches in memory
+        for clip in clips {
+            let inMeta = clip.title.localizedCaseInsensitiveContains(query)
+                || clip.excerpt.localizedCaseInsensitiveContains(query)
+                || clip.author.localizedCaseInsensitiveContains(query)
+                || clip.domain.localizedCaseInsensitiveContains(query)
+                || clip.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
+
+            guard inMeta else { continue }
+            let snippet = Self.makeSearchSnippet(
+                preferred: [ftsSnippetByClipId[clip.id], clip.excerpt],
+                keyword: query
+            )
+            let hit = GlobalSearchClipHit(clip: clip, snippet: snippet, isFullTextMatch: ftsSnippetByClipId[clip.id] != nil)
+            if clip.isArchived {
+                if seenArchived.insert(clip.id).inserted { archivedHits.append(hit) }
+            } else {
+                if seenActive.insert(clip.id).inserted { activeHits.append(hit) }
+            }
+        }
+
+        // 2. Append FTS5 full-text / note body hits (for both active and archived)
+        var fullTextHits: [GlobalSearchClipHit] = []
+        var seenFullText = Set<String>()
+
+        for fts in ftsClipHits {
+            guard let clip = clipById[fts.targetId] else { continue }
+            let snippet = Self.makeSearchSnippet(
+                preferred: [ftsSnippetByClipId[clip.id], clip.excerpt],
+                keyword: query
+            )
+            let hit = GlobalSearchClipHit(clip: clip, snippet: snippet, isFullTextMatch: true)
+            if clip.isArchived {
+                if seenArchived.insert(clip.id).inserted { archivedHits.append(hit) }
+            } else {
+                if seenActive.insert(clip.id).inserted { activeHits.append(hit) }
+                if seenFullText.insert(clip.id).inserted { fullTextHits.append(hit) }
+            }
+        }
+
+        // Ensure active meta hits also appear in full-text results if not already present
+        for hit in activeHits where seenFullText.insert(hit.clip.id).inserted {
+            fullTextHits.append(hit)
+        }
+
+        // 3. Highlight / Annotation search (direct scan guarantees CJK substrings & exact highlightId)
+        let highlightHits: [GlobalSearchHighlightHit] = allHighlights.compactMap { pair in
+            let matches = pair.highlight.quote.localizedCaseInsensitiveContains(query)
+                || pair.highlight.note.localizedCaseInsensitiveContains(query)
+                || pair.clip.title.localizedCaseInsensitiveContains(query)
+            return matches ? GlobalSearchHighlightHit(clip: pair.clip, highlight: pair.highlight) : nil
+        }
+
+        // 4. Knowledge Base document hits
+        let ftsKnowledgeHits = vault.searchDB.search(query: query, kindFilter: .knowledge, limit: 40)
+        var knowledgeSnippetById: [String: String] = [:]
+        for hit in ftsKnowledgeHits {
+            knowledgeSnippetById[hit.targetId] = hit.snippet
+                .replacingOccurrences(of: "【", with: "")
+                .replacingOccurrences(of: "】", with: "")
+        }
+
+        var knowledgeHits: [GlobalSearchKnowledgeHit] = []
+        var seenKnowledge = Set<String>()
+        for doc in knowledgeDocs {
+            let matches = knowledgeSnippetById[doc.id] != nil
+                || doc.title.localizedCaseInsensitiveContains(query)
+                || doc.content.localizedCaseInsensitiveContains(query)
+                || doc.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
+            guard matches, seenKnowledge.insert(doc.id).inserted else { continue }
+            let snippet = Self.makeSearchSnippet(
+                preferred: [knowledgeSnippetById[doc.id], doc.content],
+                keyword: query
+            )
+            knowledgeHits.append(GlobalSearchKnowledgeHit(doc: doc, snippet: snippet))
+        }
+
+        return GlobalSearchSnapshot(
+            query: query,
+            matchingFolders: matchingFolders,
+            matchingTags: matchingTags,
+            activeClipHits: activeHits,
+            fullTextClipHits: fullTextHits,
+            highlightHits: highlightHits,
+            archivedClipHits: archivedHits,
+            knowledgeHits: knowledgeHits
+        )
+    }
+
+    public static func makeSearchSnippet(preferred candidates: [String?], keyword: String) -> String {
+        for raw in candidates {
+            guard let text = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { continue }
+            let compact = text
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "  ", with: " ")
+            if let range = compact.range(of: keyword, options: .caseInsensitive) {
+                let start = compact.index(range.lowerBound, offsetBy: -24, limitedBy: compact.startIndex) ?? compact.startIndex
+                let end = compact.index(range.upperBound, offsetBy: 60, limitedBy: compact.endIndex) ?? compact.endIndex
+                let prefix = start > compact.startIndex ? "…" : ""
+                let suffix = end < compact.endIndex ? "…" : ""
+                return prefix + String(compact[start..<end]) + suffix
+            }
+        }
+        for raw in candidates {
+            if let text = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+                let compact = text.replacingOccurrences(of: "\n", with: " ")
+                return String(compact.prefix(90))
+            }
+        }
+        return ""
+    }
+
+    /// Retrieves relevant clips & knowledge docs for Global AI Search and builds the RAG system prompt.
+    public func buildGlobalAISearchContext(for query: String) -> (systemPrompt: String, citedClips: [ClipItem], citedDocs: [KnowledgeDoc]) {
+        let snapshot = runGlobalSearch(query: query)
+        var citedClips: [ClipItem] = []
+        var seenClipIds = Set<String>()
+
+        for hit in snapshot.activeClipHits {
+            if seenClipIds.insert(hit.clip.id).inserted {
+                citedClips.append(hit.clip)
+                if citedClips.count >= 6 { break }
+            }
+        }
+        if citedClips.count < 6 {
+            for hit in snapshot.highlightHits {
+                if seenClipIds.insert(hit.clip.id).inserted {
+                    citedClips.append(hit.clip)
+                    if citedClips.count >= 6 { break }
+                }
+            }
+        }
+        if citedClips.count < 4 {
+            for clip in clips where !clip.isArchived && seenClipIds.insert(clip.id).inserted {
+                citedClips.append(clip)
+                if citedClips.count >= 5 { break }
+            }
+        }
+
+        let citedDocs = Array(snapshot.knowledgeHits.prefix(3).map(\.doc))
+
+        var blocks: [String] = []
+        for (idx, clip) in citedClips.enumerated() {
+            let md = String(vault.loadArticleMarkdown(for: clip).prefix(2000))
+            let hl = clip.highlights.prefix(4).map { "「\($0.quote)」" }.joined(separator: "；")
+            blocks.append("""
+            [来源\(idx + 1)] 《\(clip.title)》(\(clip.domain) | 收藏夹：\(folderName(for: clip.folderId) ?? "收集箱") | 标签：\(clip.tags.joined(separator: ", ")))
+            摘要：\(clip.excerpt)
+            标注：\(hl.isEmpty ? "无" : hl)
+            正文节选：\(md)
+            """)
+        }
+        for (idx, doc) in citedDocs.enumerated() {
+            let content = String(doc.content.prefix(1500))
+            blocks.append("""
+            [知识库\(idx + 1)] 《\(doc.title)》(标签：\(doc.tags.joined(separator: ", ")))
+            内容节选：\(content)
+            """)
+        }
+
+        let folderSummary = folders.map { "\($0.emoji)\($0.name)" }.joined(separator: "、")
+        let systemPrompt = """
+        你是 ReadBox AI 搜索助手。用户正在通过全局搜索栏向自己的本地阅读收藏库提问。
+        请优先基于下方检索到的收藏文章、高亮标注与知识沉淀文档作答，用清晰简洁的中文 Markdown 给出直接答案；引用资料时请标注来源名称如《文章标题》。如果收藏库中没有直接相关内容，也请明确说明「收藏库中暂未直接涉及」并结合你的通用知识给予有帮助的回答。
+
+        【用户收藏库概览】共 \(clips.count) 篇收藏，\(allHighlights.count) 条标注，\(knowledgeDocs.count) 篇知识文档；收藏夹：\(folderSummary.isEmpty ? "默认收集箱" : folderSummary)。
+
+        【检索到的相关资料】
+        \(blocks.isEmpty ? "（当前收藏库暂无内容）" : blocks.joined(separator: "\n\n---\n\n"))
+        """
+
+        return (systemPrompt, citedClips, citedDocs)
+    }
+
+    /// Transfers an inline Global AI Search Q&A into the Global AI Side Drawer so the user can keep chatting.
+    public func handoffAISearchToGlobalDrawer(question: String, answer: String, reasoning: String, citedTitles: [String]) {
+        var history = chatHistories["global"] ?? []
+        history.append(ChatMessage(role: .user, content: question))
+        if !answer.isEmpty {
+            history.append(ChatMessage(role: .assistant, content: answer, reasoningContent: reasoning, citedClipTitles: citedTitles))
+        }
+        chatHistories["global"] = history
+        activeClipId = nil
+        showQuickSearchOverlay = false
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showGlobalAIDrawer = true
         }
     }
 
