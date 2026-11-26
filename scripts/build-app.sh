@@ -19,6 +19,13 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BIN_DIR/ReadBox" "$MACOS_DIR/ReadBox"
 chmod +x "$MACOS_DIR/ReadBox"
 
+# Stamp current macOS SDK version into LC_BUILD_VERSION so macOS 26+ enables true native Liquid Glass window chrome, traffic lights & controls!
+SDK_VER="$(xcrun --show-sdk-version 2>/dev/null || echo 26.0)"
+if command -v vtool >/dev/null 2>&1; then
+  vtool -set-build-version macos 14.0 "$SDK_VER" -replace -output "$MACOS_DIR/ReadBox" "$MACOS_DIR/ReadBox"
+  echo "==> Stamped Mach-O SDK version: macOS $SDK_VER (native Liquid Glass enabled)"
+fi
+
 # Copy AppIcon.icns into Contents/Resources
 if [ -f "$ROOT_DIR/Assets/AppIcon.icns" ]; then
   cp "$ROOT_DIR/Assets/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"

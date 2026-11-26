@@ -53,6 +53,7 @@ public struct MainWorkspaceView: View {
                     }
                 }
             }
+            .readBoxSeamlessToolbar()
 
             // Centered Spotlight Quick Search Overlay
             if appState.showQuickSearchOverlay {

@@ -136,65 +136,95 @@ public struct LibraryContentView: View {
     }
 
     private var topHeaderBar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Text(destinationTitle)
-                    .font(.system(size: 22, weight: .bold))
-                Text("\(appState.filteredClips.count)")
-                    .font(.system(size: 12.5, weight: .semibold))
+        ReadBoxGlassGroup(spacing: 10) {
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Text(destinationTitle)
+                        .font(.system(size: 22, weight: .bold))
+                    Text("\(appState.filteredClips.count)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .readBoxGlassSurface(in: Capsule())
+                }
+
+                Spacer()
+
+                // Liquid Glass Spotlight Search Capsule
+                Button {
+                    appState.showQuickSearchOverlay = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("快速查找")
+                            .font(.system(size: 12.5))
+                        Spacer()
+                        Text("⌘K")
+                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                    }
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .readBoxGlassSurface(in: Capsule())
-            }
-
-            Spacer()
-
-            // Liquid Glass Spotlight Search Pill
-            Button {
-                appState.showQuickSearchOverlay = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 12))
-                    Text("快速查找")
-                        .font(.system(size: 12.5))
-                    Spacer()
-                    Text("⌘K")
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 7)
+                    .frame(width: 215)
+                    .readBoxGlassSurface(in: Capsule(), interactive: true)
                 }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .frame(width: 215)
-                .readBoxGlassSurface(in: Capsule(), interactive: true)
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            // Prominent Liquid Glass Quick Add Button
-            Button {
-                appState.quickAddPrefillURL = ""
-                appState.showQuickAddSheet = true
-            } label: {
-                Label("收藏", systemImage: "plus")
-                    .font(.system(size: 12.5, weight: .semibold))
-            }
-            .readBoxGlassButton(prominent: true, tint: .blue)
-
-            // Liquid Glass AI Library Drawer Toggle
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    appState.showGlobalAIDrawer.toggle()
+                // Crystal-clear Liquid Glass Quick Add Capsule
+                Button {
+                    appState.quickAddPrefillURL = ""
+                    appState.showQuickAddSheet = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .foregroundStyle(.blue)
+                        Text("收藏")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 7)
+                    .readBoxGlassSurface(in: Capsule(), interactive: true)
                 }
-            } label: {
-                Label("AI 问全库", systemImage: "sparkles")
-                    .font(.system(size: 12.5, weight: .medium))
+                .buttonStyle(.plain)
+
+                // Crystal-clear Liquid Glass AI Library Capsule (subtle icon glow, no harsh neon block!)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        appState.showGlobalAIDrawer.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.blue, Color.indigo, Color.purple],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        Text("AI 问全库")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 7)
+                    .readBoxGlassSurface(
+                        in: Capsule(),
+                        interactive: true,
+                        tint: appState.showGlobalAIDrawer ? Color.indigo.opacity(0.28) : nil
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            .readBoxGlassButton(prominent: appState.showGlobalAIDrawer, tint: .purple)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 14)
+        .padding(.top, 10)
         .padding(.bottom, 10)
     }
 
@@ -306,21 +336,51 @@ public struct LibraryContentView: View {
                     appState.isMultiSelectMode = true
                 }
             } label: {
-                Label(appState.isMultiSelectMode ? "退出多选" : "多选 / AI 沉淀", systemImage: appState.isMultiSelectMode ? "checkmark.circle.fill" : "checklist")
-                    .font(.system(size: 12, weight: .medium))
+                HStack(spacing: 5) {
+                    Image(systemName: appState.isMultiSelectMode ? "checkmark.circle.fill" : "checklist")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(appState.isMultiSelectMode ? .blue : .secondary)
+                    Text(appState.isMultiSelectMode ? "退出多选" : "多选 / AI 沉淀")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 5)
+                .readBoxGlassSurface(
+                    in: Capsule(),
+                    interactive: true,
+                    tint: appState.isMultiSelectMode ? Color.blue.opacity(0.24) : nil
+                )
             }
-            .readBoxGlassButton(prominent: appState.isMultiSelectMode, tint: .purple)
-            .controlSize(.small)
+            .buttonStyle(.plain)
 
-            Picker("", selection: $appState.viewMode) {
-                Image(systemName: "square.grid.2x2").tag(LibraryViewMode.cards)
-                Image(systemName: "list.bullet").tag(LibraryViewMode.list)
+            // Liquid Glass View Mode Switcher Capsule
+            HStack(spacing: 2) {
+                viewModeGlassButton(.cards, icon: "square.grid.2x2")
+                viewModeGlassButton(.list, icon: "list.bullet")
             }
-            .pickerStyle(.segmented)
-            .frame(width: 72)
+            .padding(3)
+            .readBoxGlassSurface(in: Capsule())
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 10)
+    }
+
+    private func viewModeGlassButton(_ mode: LibraryViewMode, icon: String) -> some View {
+        let active = appState.viewMode == mode
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) {
+                appState.viewMode = mode
+            }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: active ? .semibold : .regular))
+                .foregroundStyle(active ? .primary : .secondary)
+                .frame(width: 28, height: 22)
+                .background(active ? Color.primary.opacity(0.14) : Color.clear)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var emptyStateView: some View {

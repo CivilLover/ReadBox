@@ -25,12 +25,12 @@ public struct SidebarView: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 15, weight: .bold))
-                        .frame(width: 30, height: 30)
+                        .foregroundStyle(.blue)
+                        .frame(width: 32, height: 32)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white)
-                .readBoxGlassSurface(in: Circle(), interactive: true, tint: .blue)
+                .readBoxGlassSurface(in: Circle(), interactive: true)
                 .help("快速添加链接 / 公众号 / 速记 (⌘N)")
             }
             .padding(.horizontal, 14)

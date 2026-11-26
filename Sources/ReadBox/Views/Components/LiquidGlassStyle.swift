@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Native Apple macOS 26+ Liquid Glass modifiers with clean translucent fallbacks for macOS 14–15.
+/// Follows Apple's Liquid Glass HIG: crisp neutral refractive glass surfaces with restrained icon tints (no harsh neon fills).
 public extension View {
     @ViewBuilder
     func readBoxGlassSurface<S: Shape>(in shape: S, interactive: Bool = false, tint: Color? = nil) -> some View {
@@ -34,6 +35,7 @@ public extension View {
         }
     }
 
+    /// Clean Liquid Glass capsule button: clear refractive glass by default, restrained accent only when prominent.
     @ViewBuilder
     func readBoxGlassButton(prominent: Bool = false, tint: Color? = nil) -> some View {
         if #available(macOS 26.0, *) {
@@ -44,11 +46,8 @@ public extension View {
                     self.buttonStyle(.glassProminent)
                 }
             } else {
-                if let tint {
-                    self.buttonStyle(.glass).tint(tint)
-                } else {
-                    self.buttonStyle(.glass)
-                }
+                // Keep non-prominent glass buttons neutral & crystal-clear (avoid neon tinted blocks)
+                self.buttonStyle(.glass)
             }
         } else {
             if prominent {
@@ -58,12 +57,38 @@ public extension View {
                     self.buttonStyle(.borderedProminent)
                 }
             } else {
-                if let tint {
-                    self.buttonStyle(.bordered).tint(tint)
-                } else {
-                    self.buttonStyle(.bordered)
-                }
+                self.buttonStyle(.bordered)
             }
+        }
+    }
+
+    @ViewBuilder
+    func readBoxSeamlessToolbar() -> some View {
+        if #available(macOS 15.0, *) {
+            self.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            self
+        }
+    }
+}
+
+/// Container that groups adjacent Liquid Glass controls so they refract & morph smoothly on macOS 26+.
+public struct ReadBoxGlassGroup<Content: View>: View {
+    private let spacing: CGFloat
+    private let content: Content
+
+    public init(spacing: CGFloat = 8, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
+        self.content = content()
+    }
+
+    public var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content
+            }
+        } else {
+            content
         }
     }
 }
@@ -81,44 +106,44 @@ public struct LiquidGlassCanvasBackground: View {
                     colors: [
                         Color(red: 0.08, green: 0.09, blue: 0.13),
                         Color(red: 0.07, green: 0.08, blue: 0.11),
-                        Color(red: 0.09, green: 0.08, blue: 0.14)
+                        Color(red: 0.09, green: 0.09, blue: 0.14)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 RadialGradient(
-                    colors: [Color.blue.opacity(0.14), Color.clear],
+                    colors: [Color.blue.opacity(0.16), Color.clear],
                     center: .topTrailing,
                     startRadius: 20,
-                    endRadius: 520
+                    endRadius: 560
                 )
                 RadialGradient(
-                    colors: [Color.purple.opacity(0.11), Color.clear],
+                    colors: [Color.indigo.opacity(0.14), Color.clear],
                     center: .bottomLeading,
                     startRadius: 20,
-                    endRadius: 460
+                    endRadius: 480
                 )
             } else {
                 LinearGradient(
                     colors: [
-                        Color(red: 0.95, green: 0.96, blue: 0.99),
-                        Color(red: 0.96, green: 0.96, blue: 0.98),
-                        Color(red: 0.94, green: 0.95, blue: 0.99)
+                        Color(red: 0.94, green: 0.96, blue: 0.99),
+                        Color(red: 0.96, green: 0.97, blue: 0.99),
+                        Color(red: 0.93, green: 0.95, blue: 0.99)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 RadialGradient(
-                    colors: [Color.blue.opacity(0.08), Color.clear],
+                    colors: [Color.blue.opacity(0.09), Color.clear],
                     center: .topTrailing,
                     startRadius: 20,
-                    endRadius: 520
+                    endRadius: 560
                 )
                 RadialGradient(
-                    colors: [Color.purple.opacity(0.06), Color.clear],
+                    colors: [Color.indigo.opacity(0.07), Color.clear],
                     center: .bottomLeading,
                     startRadius: 20,
-                    endRadius: 460
+                    endRadius: 480
                 )
             }
         }
