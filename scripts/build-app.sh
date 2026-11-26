@@ -4,10 +4,22 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-echo "==> Building ReadBox (release)..."
-swift build -c release
+RAW_VERSION="${VERSION:-0.1.0}"
+APP_VERSION="${RAW_VERSION#v}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
+UNIVERSAL="${UNIVERSAL:-0}"
 
-BIN_DIR="$(swift build -c release --show-bin-path)"
+SWIFT_BUILD_ARGS=(-c release)
+if [ "$UNIVERSAL" = "1" ]; then
+  echo "==> Building ReadBox v${APP_VERSION} (release, universal arm64 + x86_64)..."
+  SWIFT_BUILD_ARGS+=(--arch arm64 --arch x86_64)
+else
+  echo "==> Building ReadBox v${APP_VERSION} (release)..."
+fi
+
+swift build "${SWIFT_BUILD_ARGS[@]}"
+
+BIN_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)"
 APP_DIR="$ROOT_DIR/build/ReadBox.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -36,7 +48,7 @@ if [ -d "$BIN_DIR/ReadBox_ReadBox.bundle" ]; then
   cp -R "$BIN_DIR/ReadBox_ReadBox.bundle" "$RESOURCES_DIR/"
 fi
 
-cat > "$CONTENTS_DIR/Info.plist" << 'EOF'
+cat > "$CONTENTS_DIR/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -58,9 +70,9 @@ cat > "$CONTENTS_DIR/Info.plist" << 'EOF'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${BUILD_NUMBER}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -85,10 +97,14 @@ cat > "$CONTENTS_DIR/Info.plist" << 'EOF'
 </plist>
 EOF
 
-# Ad-hoc sign so macOS Gatekeeper / Keychain work smoothly on Apple Silicon
-codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
+# Sign the bundle (uses SIGN_IDENTITY if provided, otherwise ad-hoc sign for Apple Silicon / Keychain compatibility)
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_DIR" >/dev/null 2>&1 || true
 
 echo "==> Packaged successfully: $APP_DIR"
+if command -v lipo >/dev/null 2>&1; then
+  lipo -info "$MACOS_DIR/ReadBox" || true
+fi
 
 # Install into /Applications by default (set NO_INSTALL=1 to skip)
 if [ "${NO_INSTALL:-0}" != "1" ] && [ -w "/Applications" ]; then
@@ -97,8 +113,7 @@ if [ "${NO_INSTALL:-0}" != "1" ] && [ -w "/Applications" ]; then
   sleep 0.5
   rm -rf "/Applications/ReadBox.app"
   cp -R "$APP_DIR" "/Applications/ReadBox.app"
-  codesign --force --deep --sign - "/Applications/ReadBox.app" >/dev/null 2>&1 || true
+  codesign --force --deep --sign "$SIGN_IDENTITY" "/Applications/ReadBox.app" >/dev/null 2>&1 || true
   touch "/Applications/ReadBox.app"
   echo "==> Installed successfully: /Applications/ReadBox.app"
 fi
-

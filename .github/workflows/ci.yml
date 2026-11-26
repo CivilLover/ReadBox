@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build & Test (macOS)
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Environment info
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          xcrun --show-sdk-version
+
+      - name: Run unit tests
+        run: swift test
+
+      - name: Build ReadBox.app (release)
+        env:
+          NO_INSTALL: "1"
+        run: ./scripts/build-app.sh

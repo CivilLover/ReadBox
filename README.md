@@ -39,34 +39,66 @@ ReadBox/
 │   ├── Models/                    # Clip / Folder / Highlight / KnowledgeDoc / AIProvider 模型
 │   ├── Services/                  # VaultManager、SQLite FTS5、微信/网页解析器、流式 AI 引擎、Keychain
 │   ├── State/                     # AppState 全局状态管理
-│   ├── Views/                     # 仿 Cubox 三栏界面、阅读器、AI 侧边栏、知识沉淀库与偏好设置
+│   ├── Views/                     # 仿 Cubox 三栏界面、阅读器、全局搜索、AI 侧边栏、知识库与设置
 │   └── Resources/                 # 离线 reader.html 与 wysiwyg_editor.html 内核
-├── Tests/ReadBoxTests/            # Frontmatter、Vault/FTS5 搜索与解析单元测试
-└── scripts/build-app.sh           # 一键打包为可双击运行的 ReadBox.app
+├── Tests/ReadBoxTests/            # Frontmatter、Vault/FTS5 搜索、解析与全局搜索单元测试
+├── scripts/
+│   ├── build-app.sh               # 一键打包为原生 ReadBox.app（支持 UNIVERSAL=1 通用二进制）
+│   └── package-dmg.sh             # 一键生成可分发的 macOS 压缩 DMG 与 SHA-256 校验文件
+└── .github/workflows/             # GitHub Actions CI 测试与 Tag 自动打包发布 DMG Release
 ```
 
 ---
 
 ## 快速开始
 
-### 环境要求
-- macOS 14.0 (Sonoma) 及以上
-- Xcode / Swift 6 工具链
+### 方式一：直接下载 DMG 安装（推荐）
 
-### 编译、测试与运行
+前往项目的 [GitHub Releases](https://github.com/CivilLover/ReadBox/releases) 页面：
+
+1. 下载最新版本的 `ReadBox-v*-macOS-universal.dmg`（同时支持 Apple Silicon 与 Intel Mac，需 macOS 14.0+；在 macOS 26+ 自动启用原生 Liquid Glass 液态玻璃界面）。
+2. 双击打开 DMG，将 **ReadBox.app** 拖入 **Applications（应用程序）** 文件夹即可。
+
+> **首次打开说明**
+> 本开源项目当前采用本地 Ad-hoc 签名，尚未加入 Apple 付费开发者公证。首次打开若提示“无法验证开发者”或“已损坏”，在终端运行：
+> ```bash
+> xattr -cr /Applications/ReadBox.app
+> ```
+> 或在 **系统设置 → 隐私与安全性** 中点击 **“仍要打开”** 即可正常使用。
+
+### 方式二：从源码编译运行
+
+#### 环境要求
+- macOS 14.0 (Sonoma) 及以上
+- Xcode / Swift 6 工具链（启用 macOS 26 原生 Liquid Glass 需 Xcode 26+）
+
+#### 编译、测试与打包
 
 ```bash
 # 1. 运行单元测试
 swift test
 
-# 2. 打包为原生 macOS 应用（build/ReadBox.app）
+# 2. 打包为原生 macOS 应用（build/ReadBox.app，并默认安装至 /Applications）
 ./scripts/build-app.sh
 
-# 3. 启动 ReadBox
+# 如不想覆盖 /Applications，可加 NO_INSTALL=1
+NO_INSTALL=1 ./scripts/build-app.sh
+
+# 3. 如需本地制作通用二进制（arm64 + x86_64）安装包 DMG（输出至 dist/）
+UNIVERSAL=1 NO_INSTALL=1 VERSION=0.1.0 ./scripts/build-app.sh
+VERSION=0.1.0 ./scripts/package-dmg.sh
+
+# 4. 启动 ReadBox
 open build/ReadBox.app
 ```
 
 也可以直接用 Xcode 打开 `Package.swift` 进行调试与运行。
+
+### 自动发布 Release（GitHub Actions）
+
+仓库已配置 `.github/workflows/release.yml`：
+- 推送形如 `v0.1.0` 的版本标签（`git tag v0.1.0 && git push origin v0.1.0`），或在 GitHub **Actions → Release macOS DMG** 手动触发；
+- 流水线将自动在 `macos-26` Runner 上运行全部单元测试、编译 Apple Silicon + Intel 通用二进制、生成压缩 DMG 与 SHA-256 校验和，并自动发布到 GitHub Releases。
 
 ### 首次配置建议
 1. 按 `⌘,` 打开设置 → **AI 服务商**，选择 **DeepSeek**（或其他自定义服务商）填入 API Key 并测试连通性。

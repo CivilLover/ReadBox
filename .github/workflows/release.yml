@@ -1,0 +1,141 @@
+name: Release macOS DMG
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag / version (e.g. v0.1.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release macOS DMG
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release version
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RAW_TAG="${{ inputs.version }}"
+          else
+            RAW_TAG="${GITHUB_REF_NAME}"
+          fi
+          case "$RAW_TAG" in
+            v*) TAG="$RAW_TAG" ;;
+            *)  TAG="v${RAW_TAG}" ;;
+          esac
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: ${TAG} (app version: ${VERSION})"
+
+      - name: Environment info
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          xcrun --show-sdk-version
+
+      - name: Run unit tests
+        run: swift test
+
+      - name: Build Universal ReadBox.app (arm64 + x86_64)
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          UNIVERSAL: "1"
+          NO_INSTALL: "1"
+        run: ./scripts/build-app.sh
+
+      - name: Package macOS DMG
+        id: dmg
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          ARCH_LABEL: universal
+        run: |
+          ./scripts/package-dmg.sh
+          DMG_FILE="dist/ReadBox-v${VERSION}-macOS-universal.dmg"
+          SHA_FILE="${DMG_FILE}.sha256"
+          echo "dmg_path=${DMG_FILE}" >> "$GITHUB_OUTPUT"
+          echo "sha_path=${SHA_FILE}" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(awk '{print $1}' "$SHA_FILE")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReadBox-${{ steps.meta.outputs.tag }}-macOS-DMG
+          path: |
+            ${{ steps.dmg.outputs.dmg_path }}
+            ${{ steps.dmg.outputs.sha_path }}
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          DMG_PATH: ${{ steps.dmg.outputs.dmg_path }}
+          SHA_PATH: ${{ steps.dmg.outputs.sha_path }}
+          SHA256: ${{ steps.dmg.outputs.sha256 }}
+          IS_PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+        run: |
+          NOTES_FILE="$(mktemp)"
+          cat > "$NOTES_FILE" << EOF
+          ## ReadBox ${TAG} (macOS Universal)
+
+          面向个人 macOS 用户的 **Local-First AI 剪藏阅读与知识沉淀工作台**（支持 Apple Silicon 与 Intel Mac，macOS 14.0+，在 macOS 26+ 上启用原生 Liquid Glass 液态玻璃界面）。
+
+          ### 下载与安装
+          1. 下载下方资产中的 \`$(basename "$DMG_PATH")\`。
+          2. 双击打开 DMG，将 **ReadBox.app** 拖入 **Applications（应用程序）** 文件夹即可。
+
+          > **首次打开提示（开源未公证应用）**
+          > 本开源版本采用本地 Ad-hoc 签名，暂未通过 Apple 付费开发者公证。如首次打开时 macOS 提示“无法验证开发者”或“已损坏”，在终端执行以下任一方式即可正常打开：
+          > \`\`\`bash
+          > xattr -cr /Applications/ReadBox.app
+          > \`\`\`
+          > 或前往 **系统设置 → 隐私与安全性** 点击 **“仍要打开”**。
+
+          ### 校验和（SHA-256）
+          \`\`\`text
+          ${SHA256}  $(basename "$DMG_PATH")
+          \`\`\`
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "==> Release ${TAG} already exists, updating assets..."
+            gh release upload "$TAG" "$DMG_PATH" "$SHA_PATH" --clobber
+          else
+            ARGS=(
+              release create "$TAG" "$DMG_PATH" "$SHA_PATH"
+              --title "ReadBox ${TAG}"
+              --notes "$(cat "$NOTES_FILE")"
+              --generate-notes
+            )
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              ARGS+=(--target "${GITHUB_SHA}")
+            fi
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              ARGS+=(--prerelease)
+            fi
+            gh "${ARGS[@]}"
+          fi

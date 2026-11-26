@@ -1,6 +1,11 @@
 .build/
 .swiftpm/
 build/
+dist/
+*.dmg
+*.sha256
+.env
+.env.*
 .DS_Store
 *.xcuserdata
 *.xcworkspace/xcuserdata/
