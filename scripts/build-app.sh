@@ -19,6 +19,11 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BIN_DIR/ReadBox" "$MACOS_DIR/ReadBox"
 chmod +x "$MACOS_DIR/ReadBox"
 
+# Copy AppIcon.icns into Contents/Resources
+if [ -f "$ROOT_DIR/Assets/AppIcon.icns" ]; then
+  cp "$ROOT_DIR/Assets/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+fi
+
 # Copy SwiftPM resource bundle into Contents/Resources so Bundle.module & codesign work cleanly
 if [ -d "$BIN_DIR/ReadBox_ReadBox.bundle" ]; then
   cp -R "$BIN_DIR/ReadBox_ReadBox.bundle" "$RESOURCES_DIR/"
@@ -33,6 +38,8 @@ cat > "$CONTENTS_DIR/Info.plist" << 'EOF'
     <string>zh_CN</string>
     <key>CFBundleExecutable</key>
     <string>ReadBox</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.readbox.macos</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -84,6 +91,7 @@ if [ "${NO_INSTALL:-0}" != "1" ] && [ -w "/Applications" ]; then
   rm -rf "/Applications/ReadBox.app"
   cp -R "$APP_DIR" "/Applications/ReadBox.app"
   codesign --force --deep --sign - "/Applications/ReadBox.app" >/dev/null 2>&1 || true
+  touch "/Applications/ReadBox.app"
   echo "==> Installed successfully: /Applications/ReadBox.app"
 fi
 
