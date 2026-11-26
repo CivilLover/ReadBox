@@ -75,3 +75,15 @@ EOF
 codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
 
 echo "==> Packaged successfully: $APP_DIR"
+
+# Install into /Applications by default (set NO_INSTALL=1 to skip)
+if [ "${NO_INSTALL:-0}" != "1" ] && [ -w "/Applications" ]; then
+  echo "==> Installing to /Applications/ReadBox.app..."
+  pkill -x ReadBox >/dev/null 2>&1 || true
+  sleep 0.5
+  rm -rf "/Applications/ReadBox.app"
+  cp -R "$APP_DIR" "/Applications/ReadBox.app"
+  codesign --force --deep --sign - "/Applications/ReadBox.app" >/dev/null 2>&1 || true
+  echo "==> Installed successfully: /Applications/ReadBox.app"
+fi
+
