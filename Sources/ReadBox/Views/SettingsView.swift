@@ -16,6 +16,10 @@ public struct SettingsView: View {
                 .environmentObject(appState)
                 .tabItem { Label("存储与 iCloud", systemImage: "icloud.fill") }
 
+            SiteLoginSettingsTab()
+                .environmentObject(appState)
+                .tabItem { Label("站点登录 / Cookie", systemImage: "person.badge.key.fill") }
+
             GeneralSettingsTab()
                 .environmentObject(appState)
                 .tabItem { Label("通用设置", systemImage: "gearshape") }
@@ -23,7 +27,7 @@ public struct SettingsView: View {
             IntegrationsTodoTab()
                 .tabItem { Label("生态集成 (TODO)", systemImage: "puzzlepiece.extension") }
         }
-        .frame(width: 640, height: 470)
+        .frame(width: 680, height: 510)
     }
 }
 
@@ -274,6 +278,134 @@ private struct StorageAndSyncTab: View {
         if panel.runModal() == .OK, let url = panel.url {
             appState.switchVaultDirectory(to: url)
         }
+    }
+}
+
+private struct SiteLoginSettingsTab: View {
+    @EnvironmentObject var appState: AppState
+    @State private var presetCounts: [String: Int] = [:]
+    @State private var domainSummaries: [DomainCookieSummary] = []
+    @State private var loginBrowserURL: String? = nil
+    @State private var customURLInput: String = ""
+
+    // Advanced manual cookie import
+    @State private var importDomain: String = "zhihu.com"
+    @State private var importCookieString: String = ""
+    @State private var importStatus: String = ""
+
+    var body: some View {
+        Form {
+            Section("一键打开内置浏览器登录（Cookie 自动持久保存并复用于剪藏）") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
+                    ForEach(PresetLoginSite.defaults) { site in
+                        let count = presetCounts[site.domain] ?? 0
+                        HStack(spacing: 8) {
+                            Image(systemName: site.icon)
+                                .foregroundStyle(count > 0 ? .green : .secondary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(site.name)
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                Text(count > 0 ? "已保存 \(count) 条 Cookie" : "未登录")
+                                    .font(.caption2)
+                                    .foregroundStyle(count > 0 ? .green : .secondary)
+                            }
+                            Spacer()
+                            Button(count > 0 ? "查看" : "登录") {
+                                loginBrowserURL = site.loginURL
+                            }
+                            .controlSize(.small)
+                        }
+                        .padding(8)
+                        .background(Color.primary.opacity(0.04))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+
+                HStack {
+                    TextField("或输入任意其他站点网址（如 https://...）", text: $customURLInput)
+                        .onSubmit { openCustomURL() }
+                    Button("打开登录") { openCustomURL() }
+                        .disabled(customURLInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+
+            Section("已保存登录态的域名（共 \(domainSummaries.count) 个）") {
+                if domainSummaries.isEmpty {
+                    Text("尚未登录任何站点。点击上方「登录」完成一次登录后，对应站点的 Cookie 会长期保存在本机。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(domainSummaries.prefix(12)) { item in
+                        HStack {
+                            Text(item.domain)
+                                .font(.system(size: 12.5, design: .monospaced))
+                            Spacer()
+                            Text("\(item.cookieCount) 条")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button("清除", role: .destructive) {
+                                Task {
+                                    await SiteCookieManager.shared.clearCookies(forDomain: item.domain)
+                                    await refreshCookies()
+                                }
+                            }
+                            .controlSize(.small)
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+            }
+
+            Section("高级：手动导入 Cookie 字符串（可选）") {
+                HStack {
+                    TextField("域名（如 zhihu.com）", text: $importDomain)
+                        .frame(width: 170)
+                    SecureField("粘贴浏览器 DevTools 中的 Cookie 值（a=1; b=2）", text: $importCookieString)
+                    Button("导入") {
+                        Task {
+                            let n = await SiteCookieManager.shared.importCookieHeader(importCookieString, forDomain: importDomain)
+                            importStatus = n > 0 ? "✅ 已为 \(importDomain) 导入 \(n) 条 Cookie" : "⚠️ 未识别到有效 Cookie（格式应为 key=value; ...）"
+                            importCookieString = ""
+                            await refreshCookies()
+                        }
+                    }
+                    .disabled(importDomain.trimmingCharacters(in: .whitespaces).isEmpty || importCookieString.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if !importStatus.isEmpty {
+                    Text(importStatus)
+                        .font(.caption)
+                        .foregroundStyle(importStatus.hasPrefix("✅") ? .green : .orange)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .task { await refreshCookies() }
+        .sheet(isPresented: Binding(
+            get: { loginBrowserURL != nil },
+            set: { if !$0 { loginBrowserURL = nil } }
+        )) {
+            if let urlStr = loginBrowserURL {
+                SiteLoginBrowserSheet(initialURLString: urlStr) {
+                    Task { await refreshCookies() }
+                }
+            }
+        }
+    }
+
+    private func openCustomURL() {
+        let trimmed = customURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        loginBrowserURL = trimmed.hasPrefix("http") ? trimmed : "https://\(trimmed)"
+    }
+
+    private func refreshCookies() async {
+        var counts: [String: Int] = [:]
+        for site in PresetLoginSite.defaults {
+            counts[site.domain] = await SiteCookieManager.shared.cookieCount(matchingDomain: site.domain)
+        }
+        presetCounts = counts
+        domainSummaries = await SiteCookieManager.shared.loggedInDomains()
     }
 }
 

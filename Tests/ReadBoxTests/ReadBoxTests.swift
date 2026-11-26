@@ -108,4 +108,11 @@ final class ReadBoxTests: XCTestCase {
         XCTAssertTrue(fallback.needsManualWebExtract)
         XCTAssertTrue(fallback.cleanedHTML.contains("原网页"))
     }
+
+    func testCookieDomainMatching() {
+        XCTAssertTrue(SiteCookieManager.domainMatches(cookieDomain: ".zhihu.com", requestHost: "zhuanlan.zhihu.com"))
+        XCTAssertTrue(SiteCookieManager.domainMatches(cookieDomain: "zhihu.com", requestHost: "www.zhihu.com"))
+        XCTAssertTrue(SiteCookieManager.domainMatches(cookieDomain: "mp.weixin.qq.com", requestHost: "mp.weixin.qq.com"))
+        XCTAssertFalse(SiteCookieManager.domainMatches(cookieDomain: "zhihu.com", requestHost: "notzhihu.com"))
+    }
 }

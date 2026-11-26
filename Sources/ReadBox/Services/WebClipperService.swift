@@ -147,6 +147,10 @@ public final class WebClipperService {
         if isWeChat {
             req.setValue("https://mp.weixin.qq.com/", forHTTPHeaderField: "Referer")
         }
+        // Automatically attach logged-in site cookies from ReadBox's persistent WebKit store
+        if let cookieHeader = await SiteCookieManager.shared.cookieHeader(for: url), !cookieHeader.isEmpty {
+            req.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+        }
         do {
             let (data, response) = try await session.data(for: req)
             if let http = response as? HTTPURLResponse, !(200...399).contains(http.statusCode) {
@@ -430,6 +434,9 @@ public final class WebClipperService {
         var req = URLRequest(url: url)
         req.timeoutInterval = 12
         req.setValue(referer, forHTTPHeaderField: "Referer")
+        if let cookieHeader = await SiteCookieManager.shared.cookieHeader(for: url), !cookieHeader.isEmpty {
+            req.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+        }
 
         do {
             let (data, response) = try await session.data(for: req)

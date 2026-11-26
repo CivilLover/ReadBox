@@ -191,6 +191,7 @@ public struct QuickAddSheet: View {
     @State private var noteBody: String = ""
     @State private var selectedFolderId: String? = nil
     @State private var tagsInput: String = ""
+    @State private var showSiteLoginSheet: Bool = false
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -247,9 +248,13 @@ public struct QuickAddSheet: View {
 
             HStack {
                 if mode == .url {
-                    Text("提示：公众号图片会自动下载至本地 assets/，防盗链防删。")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Button {
+                        showSiteLoginSheet = true
+                    } label: {
+                        Label("需登录的站点？先登录 Cookie", systemImage: "person.badge.key")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.link)
                 }
                 Spacer()
                 Button("取消") { dismiss() }
@@ -262,6 +267,10 @@ public struct QuickAddSheet: View {
         }
         .padding(20)
         .frame(width: 520)
+        .sheet(isPresented: $showSiteLoginSheet) {
+            let firstURL = urlInput.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            SiteLoginBrowserSheet(initialURLString: firstURL.isEmpty ? "https://www.zhihu.com/signin" : firstURL)
+        }
         .onAppear {
             if !appState.quickAddPrefillURL.isEmpty {
                 urlInput = appState.quickAddPrefillURL
