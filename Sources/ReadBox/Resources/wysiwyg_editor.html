@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: transparent;
+    --text: #1d1d1f;
+    --muted: #8e8e93;
+    --border: #e5e5ea;
+    --accent: #2563eb;
+    --quote-bg: rgba(37, 99, 235, 0.06);
+    --code-bg: rgba(0, 0, 0, 0.05);
+    --menu-bg: rgba(255, 255, 255, 0.97);
+    --menu-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+    --hover: rgba(0, 0, 0, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --text: #ececee;
+      --muted: #8e8e93;
+      --border: #2e2e32;
+      --accent: #60a5fa;
+      --quote-bg: rgba(96, 165, 250, 0.1);
+      --code-bg: rgba(255, 255, 255, 0.08);
+      --menu-bg: rgba(34, 34, 38, 0.98);
+      --menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      --hover: rgba(255, 255, 255, 0.09);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #editor-wrap {
+    min-height: 100%;
+    padding: 16px 20px 120px;
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  #editor {
+    outline: none;
+    min-height: 75vh;
+    word-break: break-word;
+  }
+
+  #editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  /* Pure single-pane WYSIWYG Markdown typography */
+  #editor h1 {
+    font-size: 1.65em;
+    font-weight: 700;
+    margin: 0.9em 0 0.45em;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+  }
+  #editor h2 {
+    font-size: 1.32em;
+    font-weight: 650;
+    margin: 0.85em 0 0.4em;
+    line-height: 1.35;
+  }
+  #editor h3 {
+    font-size: 1.12em;
+    font-weight: 600;
+    margin: 0.75em 0 0.35em;
+  }
+  #editor p, #editor div {
+    margin: 0.45em 0;
+  }
+  #editor blockquote {
+    margin: 0.75em 0;
+    padding: 8px 14px;
+    border-left: 3px solid var(--accent);
+    background: var(--quote-bg);
+    border-radius: 0 8px 8px 0;
+    color: var(--muted);
+  }
+  #editor pre {
+    margin: 0.8em 0;
+    padding: 12px 14px;
+    background: var(--code-bg);
+    border-radius: 8px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+  #editor code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 1.5px 5px;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+  #editor pre code {
+    background: transparent;
+    padding: 0;
+  }
+  #editor ul, #editor ol {
+    padding-left: 22px;
+    margin: 0.45em 0;
+  }
+  #editor li {
+    margin: 0.25em 0;
+  }
+  #editor ul.task-list {
+    list-style: none;
+    padding-left: 4px;
+  }
+  #editor li.task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  #editor li.task-item input[type="checkbox"] {
+    margin-top: 6px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #editor li.task-item.checked > span {
+    text-decoration: line-through;
+    color: var(--muted);
+  }
+  #editor hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 18px 0;
+  }
+  #editor a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  #editor del {
+    color: var(--muted);
+  }
+
+  /* Slash command floating menu */
+  #slash-menu {
+    position: fixed;
+    display: none;
+    flex-direction: column;
+    width: 210px;
+    padding: 6px;
+    border-radius: 12px;
+    background: var(--menu-bg);
+    border: 1px solid var(--border);
+    box-shadow: var(--menu-shadow);
+    backdrop-filter: blur(18px);
+    z-index: 9999;
+  }
+  .slash-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .slash-item:hover, .slash-item.active {
+    background: var(--hover);
+  }
+  .slash-hint {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: ui-monospace, monospace;
+  }
+
+  /* Subtle floating inline format bar when selecting text */
+  #format-bar {
+    position: fixed;
+    display: none;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    border-radius: 10px;
+    background: var(--menu-bg);
+    border: 1px solid var(--border);
+    box-shadow: var(--menu-shadow);
+    backdrop-filter: blur(16px);
+    transform: translate(-50%, -100%);
+    z-index: 9998;
+  }
+  .fmt-btn {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .fmt-btn:hover { background: var(--hover); }
+</style>
+</head>
+<body>
+  <div id="editor-wrap">
+    <div id="editor" contenteditable="true" spellcheck="true" data-placeholder="直接输入文字，支持 # 标题、**加粗**、> 引用、- [ ] 待办，或输入 / 呼出快捷菜单…"></div>
+  </div>
+
+  <div id="format-bar">
+    <button class="fmt-btn" data-cmd="bold" title="加粗 (⌘B)">B</button>
+    <button class="fmt-btn" data-cmd="italic" title="斜体 (⌘I)"><em>I</em></button>
+    <button class="fmt-btn" data-cmd="strike" title="删除线"><s>S</s></button>
+    <button class="fmt-btn" data-cmd="code" title="行内代码">&lt;/&gt;</button>
+    <button class="fmt-btn" data-cmd="h2" title="小标题">H2</button>
+    <button class="fmt-btn" data-cmd="quote" title="引用">”</button>
+  </div>
+
+  <div id="slash-menu">
+    <button class="slash-item" data-block="h1"><span>大标题</span><span class="slash-hint">#</span></button>
+    <button class="slash-item" data-block="h2"><span>中标题</span><span class="slash-hint">##</span></button>
+    <button class="slash-item" data-block="h3"><span>小标题</span><span class="slash-hint">###</span></button>
+    <button class="slash-item" data-block="ul"><span>无序列表</span><span class="slash-hint">-</span></button>
+    <button class="slash-item" data-block="task"><span>待办清单</span><span class="slash-hint">- [ ]</span></button>
+    <button class="slash-item" data-block="quote"><span>引用块</span><span class="slash-hint">&gt;</span></button>
+    <button class="slash-item" data-block="code"><span>代码块</span><span class="slash-hint">```</span></button>
+    <button class="slash-item" data-block="hr"><span>分割线</span><span class="slash-hint">---</span></button>
+  </div>
+
+<script>
+  const editor = document.getElementById('editor');
+  const slashMenu = document.getElementById('slash-menu');
+  const formatBar = document.getElementById('format-bar');
+  let debounceTimer = null;
+  let suppressNotify = false;
+  let lastEmittedMarkdown = '';
+
+  function postToSwift(payload) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.editor) {
+      window.webkit.messageHandlers.editor.postMessage(payload);
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderInlineMarkdown(text) {
+    let html = escapeHtml(text);
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2">$1</a>');
+    return html;
+  }
+
+  function markdownToHTML(md) {
+    if (!md || !md.trim()) return '';
+    const lines = md.replace(/\r\n/g, '\n').split('\n');
+    let out = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // Fenced code block
+      if (/^```/.test(line.trim())) {
+        let codeLines = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i].trim())) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        i++;
+        out.push('<pre><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>');
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^---+$/.test(line.trim()) || /^\*\*\*+$/.test(line.trim())) {
+        out.push('<hr />');
+        i++;
+        continue;
+      }
+
+      // Headings
+      const hMatch = line.match(/^(#{1,3})\s+(.*)$/);
+      if (hMatch) {
+        const lvl = hMatch[1].length;
+        out.push('<h' + lvl + '>' + renderInlineMarkdown(hMatch[2]) + '</h' + lvl + '>');
+        i++;
+        continue;
+      }
+
+      // Blockquote
+      if (/^>\s?/.test(line)) {
+        let qLines = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) {
+          qLines.push(lines[i].replace(/^>\s?/, ''));
+          i++;
+        }
+        out.push('<blockquote>' + qLines.map(renderInlineMarkdown).join('<br />') + '</blockquote>');
+        continue;
+      }
+
+      // Task list
+      if (/^-\s+\[( |x|X)\]\s+/.test(line)) {
+        let items = [];
+        while (i < lines.length && /^-\s+\[( |x|X)\]\s+/.test(lines[i])) {
+          const m = lines[i].match(/^-\s+\[( |x|X)\]\s+(.*)$/);
+          const checked = m[1].toLowerCase() === 'x';
+          items.push('<li class="task-item' + (checked ? ' checked' : '') + '"><input type="checkbox"' + (checked ? ' checked' : '') + ' /><span>' + renderInlineMarkdown(m[2]) + '</span></li>');
+          i++;
+        }
+        out.push('<ul class="task-list">' + items.join('') + '</ul>');
+        continue;
+      }
+
+      // Unordered list
+      if (/^[-*+]\s+/.test(line)) {
+        let items = [];
+        while (i < lines.length && /^[-*+]\s+/.test(lines[i])) {
+          items.push('<li>' + renderInlineMarkdown(lines[i].replace(/^[-*+]\s+/, '')) + '</li>');
+          i++;
+        }
+        out.push('<ul>' + items.join('') + '</ul>');
+        continue;
+      }
+
+      // Ordered list
+      if (/^\d+\.\s+/.test(line)) {
+        let items = [];
+        while (i < lines.length && /^\d+\.\s+/.test(lines[i])) {
+          items.push('<li>' + renderInlineMarkdown(lines[i].replace(/^\d+\.\s+/, '')) + '</li>');
+          i++;
+        }
+        out.push('<ol>' + items.join('') + '</ol>');
+        continue;
+      }
+
+      if (line.trim() === '') {
+        i++;
+        continue;
+      }
+
+      out.push('<p>' + renderInlineMarkdown(line) + '</p>');
+      i++;
+    }
+    return out.join('');
+  }
+
+  function serializeInline(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.nodeValue || '';
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'br') return '\n';
+    const inner = Array.from(node.childNodes).map(serializeInline).join('');
+    if (tag === 'strong' || tag === 'b') return inner ? '**' + inner + '**' : '';
+    if (tag === 'em' || tag === 'i') return inner ? '*' + inner + '*' : '';
+    if (tag === 'del' || tag === 's' || tag === 'strike') return inner ? '~~' + inner + '~~' : '';
+    if (tag === 'code') return inner ? '`' + inner + '`' : '';
+    if (tag === 'a') return '[' + inner + '](' + (node.getAttribute('href') || '') + ')';
+    return inner;
+  }
+
+  function htmlToMarkdown() {
+    const blocks = [];
+    Array.from(editor.childNodes).forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const t = node.nodeValue.trim();
+        if (t) blocks.push(t);
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = node.tagName.toLowerCase();
+
+      if (tag === 'h1') blocks.push('# ' + serializeInline(node).trim());
+      else if (tag === 'h2') blocks.push('## ' + serializeInline(node).trim());
+      else if (tag === 'h3') blocks.push('### ' + serializeInline(node).trim());
+      else if (tag === 'hr') blocks.push('---');
+      else if (tag === 'pre') blocks.push('```\n' + (node.innerText || '').replace(/\n$/, '') + '\n```');
+      else if (tag === 'blockquote') {
+        const lines = serializeInline(node).trim().split('\n');
+        blocks.push(lines.map(l => '> ' + l).join('\n'));
+      } else if (tag === 'ul') {
+        const items = [];
+        node.querySelectorAll(':scope > li').forEach(li => {
+          if (li.classList.contains('task-item')) {
+            const cb = li.querySelector('input[type="checkbox"]');
+            const span = li.querySelector('span') || li;
+            items.push('- [' + (cb && cb.checked ? 'x' : ' ') + '] ' + serializeInline(span).trim());
+          } else {
+            items.push('- ' + serializeInline(li).trim());
+          }
+        });
+        if (items.length) blocks.push(items.join('\n'));
+      } else if (tag === 'ol') {
+        const items = [];
+        node.querySelectorAll(':scope > li').forEach((li, idx) => {
+          items.push((idx + 1) + '. ' + serializeInline(li).trim());
+        });
+        if (items.length) blocks.push(items.join('\n'));
+      } else {
+        const text = serializeInline(node).trim();
+        if (text) blocks.push(text);
+      }
+    });
+    return blocks.join('\n\n');
+  }
+
+  window.setMarkdown = function(md) {
+    if (md === lastEmittedMarkdown && document.activeElement === editor) return;
+    suppressNotify = true;
+    editor.innerHTML = markdownToHTML(md || '');
+    lastEmittedMarkdown = md || '';
+    suppressNotify = false;
+  };
+
+  window.appendMarkdown = function(md) {
+    const current = htmlToMarkdown();
+    const combined = current.trim() ? current.trim() + '\n\n' + md.trim() : md.trim();
+    suppressNotify = true;
+    editor.innerHTML = markdownToHTML(combined);
+    suppressNotify = false;
+    emitChangeNow();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  };
+
+  function emitChangeNow() {
+    if (suppressNotify) return;
+    const md = htmlToMarkdown();
+    lastEmittedMarkdown = md;
+    postToSwift({ type: 'change', markdown: md });
+  }
+
+  function scheduleEmit() {
+    if (suppressNotify) return;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(emitChangeNow, 260);
+  }
+
+  // Interactive checkbox toggling inside single-pane editor
+  editor.addEventListener('change', (e) => {
+    if (e.target && e.target.type === 'checkbox') {
+      const li = e.target.closest('li.task-item');
+      if (li) li.classList.toggle('checked', e.target.checked);
+      emitChangeNow();
+    }
+  });
+
+  // Live Markdown block & inline shortcuts (Typora / Notion style)
+  editor.addEventListener('input', () => {
+    handleLiveMarkdownTransform();
+    scheduleEmit();
+  });
+
+  function getCurrentBlock() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    let node = sel.anchorNode;
+    while (node && node !== editor && node.parentNode !== editor) {
+      node = node.parentNode;
+    }
+    return node === editor ? null : node;
+  }
+
+  function placeCaretAtEnd(el) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function replaceBlock(oldBlock, newEl, focusTarget) {
+    if (oldBlock && oldBlock.parentNode === editor) {
+      editor.replaceChild(newEl, oldBlock);
+    } else {
+      editor.appendChild(newEl);
+    }
+    placeCaretAtEnd(focusTarget || newEl);
+  }
+
+  function handleLiveMarkdownTransform() {
+    const block = getCurrentBlock();
+    if (!block) return;
+    const text = (block.textContent || '').replace(/\u00a0/g, ' ');
+
+    // Slash menu trigger
+    if (text.trim() === '/') {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        slashMenu.style.left = Math.min(window.innerWidth - 220, Math.max(12, rect.left)) + 'px';
+        slashMenu.style.top = (rect.bottom + 8) + 'px';
+        slashMenu.style.display = 'flex';
+      }
+      return;
+    } else {
+      slashMenu.style.display = 'none';
+    }
+
+    if (block.tagName && ['PRE', 'UL', 'OL'].includes(block.tagName)) return;
+
+    // Heading triggers: "# ", "## ", "### "
+    const hm = text.match(/^(#{1,3})\s(.*)$/);
+    if (hm) {
+      const h = document.createElement('h' + hm[1].length);
+      h.textContent = hm[2];
+      replaceBlock(block, h);
+      return;
+    }
+
+    // Quote trigger: "> "
+    if (/^>\s/.test(text)) {
+      const bq = document.createElement('blockquote');
+      bq.textContent = text.replace(/^>\s/, '');
+      replaceBlock(block, bq);
+      return;
+    }
+
+    // Task list trigger: "- [ ] " or "- [x] "
+    const tm = text.match(/^-\s\[( |x|X)\]\s(.*)$/);
+    if (tm) {
+      const ul = document.createElement('ul');
+      ul.className = 'task-list';
+      const checked = tm[1].toLowerCase() === 'x';
+      const li = document.createElement('li');
+      li.className = 'task-item' + (checked ? ' checked' : '');
+      li.innerHTML = '<input type="checkbox"' + (checked ? ' checked' : '') + ' /><span>' + escapeHtml(tm[2] || '') + '</span>';
+      ul.appendChild(li);
+      replaceBlock(block, ul, li.querySelector('span'));
+      return;
+    }
+
+    // Bullet list trigger: "- " or "* "
+    if (/^[-*]\s/.test(text)) {
+      const ul = document.createElement('ul');
+      const li = document.createElement('li');
+      li.textContent = text.replace(/^[-*]\s/, '');
+      ul.appendChild(li);
+      replaceBlock(block, ul, li);
+      return;
+    }
+
+    // Numbered list trigger: "1. "
+    if (/^1\.\s/.test(text)) {
+      const ol = document.createElement('ol');
+      const li = document.createElement('li');
+      li.textContent = text.replace(/^1\.\s/, '');
+      ol.appendChild(li);
+      replaceBlock(block, ol, li);
+      return;
+    }
+
+    // Code block trigger: "```"
+    if (/^```/.test(text.trim())) {
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      code.textContent = '';
+      pre.appendChild(code);
+      replaceBlock(block, pre, code);
+      return;
+    }
+
+    // Divider trigger: "---"
+    if (text.trim() === '---') {
+      const hr = document.createElement('hr');
+      const p = document.createElement('p');
+      p.innerHTML = '<br />';
+      editor.replaceChild(hr, block);
+      hr.after(p);
+      placeCaretAtEnd(p);
+      return;
+    }
+
+    // Inline live conversions when closing pattern completed
+    const sel = window.getSelection();
+    if (sel && sel.isCollapsed && sel.anchorNode && sel.anchorNode.nodeType === Node.TEXT_NODE) {
+      const tNode = sel.anchorNode;
+      const val = tNode.nodeValue;
+      const inlineRules = [
+        { re: /\*\*([^*\n]+)\*\*$/, tag: 'strong' },
+        { re: /`([^`\n]+)`$/, tag: 'code' },
+        { re: /~~([^~\n]+)~~$/, tag: 'del' }
+      ];
+      for (const rule of inlineRules) {
+        const m = val.slice(0, sel.anchorOffset).match(rule.re);
+        if (m) {
+          const matchStart = sel.anchorOffset - m[0].length;
+          const before = val.slice(0, matchStart);
+          const after = val.slice(sel.anchorOffset);
+          const parent = tNode.parentNode;
+          if (before) parent.insertBefore(document.createTextNode(before), tNode);
+          const el = document.createElement(rule.tag);
+          el.textContent = m[1];
+          parent.insertBefore(el, tNode);
+          const trailing = document.createTextNode(after || '\u200B');
+          parent.insertBefore(trailing, tNode);
+          parent.removeChild(tNode);
+          const range = document.createRange();
+          range.setStart(trailing, after ? 0 : 1);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          break;
+        }
+      }
+    }
+  }
+
+  // Slash command execution
+  slashMenu.querySelectorAll('.slash-item').forEach(btn => {
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.block;
+      const block = getCurrentBlock();
+      slashMenu.style.display = 'none';
+      if (kind === 'h1' || kind === 'h2' || kind === 'h3') {
+        const h = document.createElement(kind);
+        h.innerHTML = '<br />';
+        replaceBlock(block, h);
+      } else if (kind === 'quote') {
+        const bq = document.createElement('blockquote');
+        bq.innerHTML = '<br />';
+        replaceBlock(block, bq);
+      } else if (kind === 'ul') {
+        const ul = document.createElement('ul');
+        const li = document.createElement('li');
+        li.innerHTML = '<br />';
+        ul.appendChild(li);
+        replaceBlock(block, ul, li);
+      } else if (kind === 'task') {
+        const ul = document.createElement('ul');
+        ul.className = 'task-list';
+        const li = document.createElement('li');
+        li.className = 'task-item';
+        li.innerHTML = '<input type="checkbox" /><span></span>';
+        ul.appendChild(li);
+        replaceBlock(block, ul, li.querySelector('span'));
+      } else if (kind === 'code') {
+        const pre = document.createElement('pre');
+        const code = document.createElement('code');
+        code.innerHTML = '<br />';
+        pre.appendChild(code);
+        replaceBlock(block, pre, code);
+      } else if (kind === 'hr') {
+        const hr = document.createElement('hr');
+        const p = document.createElement('p');
+        p.innerHTML = '<br />';
+        if (block && block.parentNode === editor) editor.replaceChild(hr, block);
+        else editor.appendChild(hr);
+        hr.after(p);
+        placeCaretAtEnd(p);
+      }
+      scheduleEmit();
+    });
+  });
+
+  // Subtle selection format bar
+  document.addEventListener('mouseup', (e) => {
+    if (formatBar.contains(e.target) || slashMenu.contains(e.target)) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && editor.contains(sel.anchorNode)) {
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      formatBar.style.left = Math.min(window.innerWidth - 110, Math.max(110, rect.left + rect.width / 2)) + 'px';
+      formatBar.style.top = Math.max(46, rect.top - 8) + 'px';
+      formatBar.style.display = 'flex';
+    } else {
+      formatBar.style.display = 'none';
+    }
+  });
+
+  formatBar.querySelectorAll('.fmt-btn').forEach(btn => {
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('click', () => {
+      const cmd = btn.dataset.cmd;
+      if (cmd === 'bold') document.execCommand('bold');
+      else if (cmd === 'italic') document.execCommand('italic');
+      else if (cmd === 'strike') document.execCommand('strikeThrough');
+      else if (cmd === 'h2') document.execCommand('formatBlock', false, 'h2');
+      else if (cmd === 'quote') document.execCommand('formatBlock', false, 'blockquote');
+      else if (cmd === 'code') {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount) {
+          const text = sel.toString();
+          document.execCommand('insertHTML', false, '<code>' + escapeHtml(text) + '</code>');
+        }
+      }
+      formatBar.style.display = 'none';
+      scheduleEmit();
+    });
+  });
+
+  // Escape dismisses popups
+  editor.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      slashMenu.style.display = 'none';
+      formatBar.style.display = 'none';
+    }
+  });
+</script>
+</body>
+</html>

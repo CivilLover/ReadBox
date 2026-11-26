@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1d1d1f;
+    --muted: #86868b;
+    --border: #e5e5ea;
+    --quote-bg: #f6f8fa;
+    --quote-bar: #2563eb;
+    --code-bg: #f5f5f7;
+    --link: #2563eb;
+    --popover-bg: rgba(255, 255, 255, 0.96);
+    --popover-border: rgba(0, 0, 0, 0.08);
+    --popover-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+    --btn-hover: rgba(0, 0, 0, 0.06);
+    --font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    --font-size: 17px;
+    --line-height: 1.8;
+    --content-width: 700px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="system"] {
+      --bg: #161618;
+      --text: #e5e5e7;
+      --muted: #98989f;
+      --border: #2c2c2e;
+      --quote-bg: #1f1f22;
+      --quote-bar: #3b82f6;
+      --code-bg: #232326;
+      --link: #60a5fa;
+      --popover-bg: rgba(36, 36, 39, 0.96);
+      --popover-border: rgba(255, 255, 255, 0.12);
+      --popover-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+      --btn-hover: rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #161618;
+    --text: #e5e5e7;
+    --muted: #98989f;
+    --border: #2c2c2e;
+    --quote-bg: #1f1f22;
+    --quote-bar: #3b82f6;
+    --code-bg: #232326;
+    --link: #60a5fa;
+    --popover-bg: rgba(36, 36, 39, 0.96);
+    --popover-border: rgba(255, 255, 255, 0.12);
+    --popover-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+    --btn-hover: rgba(255, 255, 255, 0.1);
+  }
+
+  :root[data-theme="sepia"] {
+    --bg: #f8f3e6;
+    --text: #3b3026;
+    --muted: #7c6f60;
+    --border: #e5dcc8;
+    --quote-bg: #f0e8d5;
+    --quote-bar: #b45309;
+    --code-bg: #efe6d2;
+    --link: #9a5b13;
+    --popover-bg: rgba(252, 248, 239, 0.97);
+    --popover-border: rgba(90, 70, 40, 0.14);
+    --popover-shadow: 0 10px 30px rgba(70, 50, 20, 0.16);
+    --btn-hover: rgba(90, 70, 40, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: 36px 28px 120px;
+  }
+
+  .article-header {
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .article-title {
+    margin: 0 0 12px;
+    font-size: 1.65em;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+  }
+
+  .article-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .article-meta a {
+    color: var(--link);
+    text-decoration: none;
+  }
+
+  #article-body {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  #article-body h1, #article-body h2, #article-body h3, #article-body h4 {
+    line-height: 1.4;
+    margin-top: 1.6em;
+    margin-bottom: 0.6em;
+    font-weight: 650;
+  }
+
+  #article-body p, #article-body section {
+    margin: 0.9em 0;
+  }
+
+  #article-body img {
+    display: block;
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 18px auto;
+    border-radius: 10px;
+  }
+
+  #article-body blockquote {
+    margin: 1.2em 0;
+    padding: 10px 16px;
+    border-left: 3.5px solid var(--quote-bar);
+    background: var(--quote-bg);
+    border-radius: 0 8px 8px 0;
+    color: var(--muted);
+  }
+
+  #article-body pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 0.86em;
+    line-height: 1.55;
+  }
+
+  #article-body code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 2px 5px;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+
+  #article-body pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  #article-body a {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  #article-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.92em;
+  }
+
+  #article-body th, #article-body td {
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+  }
+
+  mark.rb-hl {
+    color: inherit;
+    padding: 1px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: filter 0.15s ease, box-shadow 0.25s ease;
+  }
+  mark.rb-hl[data-color="yellow"] { background: rgba(255, 218, 76, 0.45); }
+  mark.rb-hl[data-color="green"]  { background: rgba(116, 222, 128, 0.40); }
+  mark.rb-hl[data-color="blue"]   { background: rgba(110, 184, 255, 0.38); }
+  mark.rb-hl[data-color="pink"]   { background: rgba(255, 148, 184, 0.40); }
+  mark.rb-hl[data-color="purple"] { background: rgba(192, 150, 255, 0.40); }
+
+  mark.rb-hl.pulse {
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.35);
+  }
+
+  /* Cubox-inspired 2-row floating selection popover */
+  #selection-popover {
+    position: fixed;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 9999;
+    transform: translate(-50%, -100%);
+    pointer-events: auto;
+    user-select: none;
+  }
+
+  .pop-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    background: var(--popover-bg);
+    border: 1px solid var(--popover-border);
+    box-shadow: var(--popover-shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .color-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  .color-dot:hover { transform: scale(1.16); }
+  .color-dot[data-color="yellow"] { background: #facc15; }
+  .color-dot[data-color="green"]  { background: #4ade80; }
+  .color-dot[data-color="blue"]   { background: #60a5fa; }
+  .color-dot[data-color="pink"]   { background: #f472b6; }
+  .color-dot[data-color="purple"] { background: #a78bfa; }
+
+  .pop-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 5px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pop-btn:hover { background: var(--btn-hover); }
+  .pop-btn.ai-btn { color: #7c3aed; }
+  .pop-sep { width: 1px; height: 14px; background: var(--border); }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header class="article-header">
+      <h1 class="article-title" id="doc-title"></h1>
+      <div class="article-meta" id="doc-meta"></div>
+    </header>
+    <article id="article-body"></article>
+  </div>
+
+  <div id="selection-popover">
+    <div class="pop-pill" id="color-row">
+      <button class="color-dot" data-color="yellow" title="黄色高亮"></button>
+      <button class="color-dot" data-color="green" title="绿色高亮"></button>
+      <button class="color-dot" data-color="blue" title="蓝色高亮"></button>
+      <button class="color-dot" data-color="pink" title="粉色高亮"></button>
+      <button class="color-dot" data-color="purple" title="紫色高亮"></button>
+    </div>
+    <div class="pop-pill" id="action-row">
+      <button class="pop-btn" id="btn-remove" style="display:none;">✕ 取消高亮</button>
+      <button class="pop-btn" id="btn-quote">📝 引用到笔记</button>
+      <div class="pop-sep"></div>
+      <button class="pop-btn" id="btn-copy">复制</button>
+      <div class="pop-sep"></div>
+      <button class="pop-btn ai-btn" id="btn-ai">✨ 问 AI</button>
+    </div>
+  </div>
+
+<script>
+  let currentSelectedText = '';
+  let activeHighlightId = null;
+
+  function postToSwift(payload) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.reader) {
+      window.webkit.messageHandlers.reader.postMessage(payload);
+    }
+  }
+
+  window.applyPreferences = function(prefs) {
+    const root = document.documentElement;
+    root.setAttribute('data-theme', prefs.theme || 'system');
+    root.style.setProperty('--font-family', prefs.fontFamily || "-apple-system, 'PingFang SC', sans-serif");
+    root.style.setProperty('--font-size', (prefs.fontSize || 17) + 'px');
+    root.style.setProperty('--line-height', String(prefs.lineHeight || 1.8));
+    root.style.setProperty('--content-width', (prefs.contentWidth || 700) + 'px');
+  };
+
+  window.loadArticle = function(payload) {
+    document.getElementById('doc-title').textContent = payload.title || '';
+    const metaEl = document.getElementById('doc-meta');
+    const parts = [];
+    if (payload.author) parts.push('<span>' + escapeHtml(payload.author) + '</span>');
+    if (payload.domain) parts.push('<span>' + escapeHtml(payload.domain) + '</span>');
+    if (payload.dateText) parts.push('<span>' + escapeHtml(payload.dateText) + '</span>');
+    if (payload.url) parts.push('<a href="' + escapeHtml(payload.url) + '" target="_blank">打开原文 ↗</a>');
+    metaEl.innerHTML = parts.join('<span>·</span>');
+
+    const body = document.getElementById('article-body');
+    body.innerHTML = payload.html || '<p style="color:var(--muted)">暂无正文内容</p>';
+
+    // Strip distracting fixed widths from WeChat inline styles
+    body.querySelectorAll('[style]').forEach(el => {
+      if (el.style.width && el.style.width.endsWith('px')) {
+        el.style.maxWidth = '100%';
+      }
+      if (el.style.visibility === 'hidden') {
+        el.style.visibility = 'visible';
+      }
+    });
+
+    window.renderHighlights(payload.highlights || []);
+    window.scrollTo(0, 0);
+  };
+
+  window.renderHighlights = function(highlights) {
+    const body = document.getElementById('article-body');
+    // Unwrap existing highlights first
+    body.querySelectorAll('mark.rb-hl').forEach(mark => {
+      const parent = mark.parentNode;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+      parent.normalize();
+    });
+
+    highlights.forEach(h => {
+      if (!h.quote || h.quote.trim().length < 2) return;
+      highlightQuoteInNode(body, h.quote.trim(), h.id, h.color || 'yellow');
+    });
+  };
+
+  function highlightQuoteInNode(root, quote, id, color) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const textNodes = [];
+    let fullText = '';
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue) continue;
+      textNodes.push({ node, start: fullText.length, end: fullText.length + node.nodeValue.length });
+      fullText += node.nodeValue;
+    }
+
+    const idx = fullText.indexOf(quote);
+    if (idx === -1) return;
+    const endIdx = idx + quote.length;
+
+    // Wrap each overlapping text node slice cleanly
+    for (let i = textNodes.length - 1; i >= 0; i--) {
+      const tn = textNodes[i];
+      if (tn.end <= idx || tn.start >= endIdx) continue;
+      const localStart = Math.max(0, idx - tn.start);
+      const localEnd = Math.min(tn.node.nodeValue.length, endIdx - tn.start);
+      if (localStart >= localEnd) continue;
+
+      const targetNode = tn.node;
+      const range = document.createRange();
+      range.setStart(targetNode, localStart);
+      range.setEnd(targetNode, localEnd);
+
+      const mark = document.createElement('mark');
+      mark.className = 'rb-hl';
+      mark.dataset.hlId = id;
+      mark.dataset.color = color;
+      try {
+        range.surroundContents(mark);
+      } catch (e) {}
+    }
+  }
+
+  window.scrollToHighlight = function(id) {
+    const el = document.querySelector('mark.rb-hl[data-hl-id="' + CSS.escape(id) + '"]');
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('pulse');
+    setTimeout(() => el.classList.remove('pulse'), 1400);
+  };
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  const popover = document.getElementById('selection-popover');
+  const removeBtn = document.getElementById('btn-remove');
+
+  function hidePopover() {
+    popover.style.display = 'none';
+    activeHighlightId = null;
+  }
+
+  function showPopoverAt(rect, isExistingHighlight) {
+    const x = Math.min(window.innerWidth - 150, Math.max(150, rect.left + rect.width / 2));
+    const y = Math.max(92, rect.top - 10);
+    popover.style.left = x + 'px';
+    popover.style.top = y + 'px';
+    removeBtn.style.display = isExistingHighlight ? 'inline-flex' : 'none';
+    popover.style.display = 'flex';
+  }
+
+  document.addEventListener('mouseup', (e) => {
+    if (popover.contains(e.target)) return;
+
+    // Clicking an existing highlight
+    const mark = e.target.closest && e.target.closest('mark.rb-hl');
+    const sel = window.getSelection();
+    const selText = sel ? sel.toString().trim() : '';
+
+    if (selText.length >= 2) {
+      currentSelectedText = selText;
+      activeHighlightId = null;
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      showPopoverAt(rect, false);
+    } else if (mark) {
+      activeHighlightId = mark.dataset.hlId;
+      // Collect full quote across split marks of same id
+      const allMarks = document.querySelectorAll('mark.rb-hl[data-hl-id="' + CSS.escape(activeHighlightId) + '"]');
+      currentSelectedText = Array.from(allMarks).map(m => m.textContent).join('');
+      showPopoverAt(mark.getBoundingClientRect(), true);
+    } else {
+      hidePopover();
+    }
+  });
+
+  document.addEventListener('scroll', hidePopover, { passive: true });
+
+  document.querySelectorAll('.color-dot').forEach(dot => {
+    dot.addEventListener('mousedown', (e) => e.preventDefault());
+    dot.addEventListener('click', () => {
+      const color = dot.dataset.color;
+      if (currentSelectedText) {
+        postToSwift({ type: 'addHighlight', quote: currentSelectedText, color: color });
+        window.getSelection().removeAllRanges();
+        hidePopover();
+      }
+    });
+  });
+
+  removeBtn.addEventListener('click', () => {
+    if (activeHighlightId) {
+      postToSwift({ type: 'removeHighlight', id: activeHighlightId });
+      hidePopover();
+    }
+  });
+
+  document.getElementById('btn-quote').addEventListener('click', () => {
+    if (currentSelectedText) {
+      postToSwift({ type: 'quoteToNote', quote: currentSelectedText });
+      window.getSelection().removeAllRanges();
+      hidePopover();
+    }
+  });
+
+  document.getElementById('btn-copy').addEventListener('click', () => {
+    if (currentSelectedText) {
+      postToSwift({ type: 'copyText', text: currentSelectedText });
+      window.getSelection().removeAllRanges();
+      hidePopover();
+    }
+  });
+
+  document.getElementById('btn-ai').addEventListener('click', () => {
+    if (currentSelectedText) {
+      postToSwift({ type: 'askAI', quote: currentSelectedText });
+      window.getSelection().removeAllRanges();
+      hidePopover();
+    }
+  });
+</script>
+</body>
+</html>
