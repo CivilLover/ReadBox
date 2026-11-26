@@ -13,30 +13,6 @@ public struct SidebarView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Prominent Quick-Add Header inside Sidebar top-right (easy 1-click link capture)
-            HStack(spacing: 8) {
-                Text("ReadBox")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.primary.opacity(0.9))
-                Spacer()
-                Button {
-                    appState.quickAddPrefillURL = ""
-                    appState.showQuickAddSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.blue)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .readBoxGlassSurface(in: Circle(), interactive: true)
-                .help("快速添加链接 / 公众号 / 速记 (⌘N)")
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-
             List(selection: Binding(
                 get: { appState.destination },
                 set: { newDest in
