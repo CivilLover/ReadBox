@@ -69,6 +69,7 @@ public struct AISidebarView: View {
                         } label: {
                             Text(prompt)
                                 .font(.system(size: 11.5))
+                                .lineLimit(1)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(Color.purple.opacity(0.09))
@@ -82,6 +83,8 @@ public struct AISidebarView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
             }
+            .frame(maxWidth: .infinity)
+            .clipped()
 
             // Input Box
             HStack(alignment: .bottom, spacing: 8) {
@@ -94,6 +97,7 @@ public struct AISidebarView: View {
                 .lineLimit(1...5)
                 .font(.system(size: 13))
                 .padding(8)
+                .frame(minWidth: 0, maxWidth: .infinity)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.1), lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -112,6 +116,7 @@ public struct AISidebarView: View {
                             .foregroundStyle(.red)
                     }
                     .buttonStyle(.plain)
+                    .fixedSize()
                     .help("停止生成")
                 } else {
                     Button {
@@ -122,11 +127,13 @@ public struct AISidebarView: View {
                             .foregroundStyle(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary.opacity(0.4) : Color.purple)
                     }
                     .buttonStyle(.plain)
+                    .fixedSize()
                     .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .padding(10)
         }
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         .onChange(of: appState.pendingAIQuoteQuestion) { _, newQ in
             if let q = newQ, !q.isEmpty {
                 appState.pendingAIQuoteQuestion = nil
@@ -169,11 +176,13 @@ public struct AISidebarView: View {
                     Text("\(appState.settings.activeProvider.name) · \(appState.settings.activeModelName)")
                         .font(.system(size: 11.5, weight: .medium))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
             .menuStyle(.borderlessButton)
+            .frame(minWidth: 0, alignment: .leading)
 
-            Spacer()
+            Spacer(minLength: 6)
 
             if !messages.isEmpty {
                 Button {
@@ -184,6 +193,7 @@ public struct AISidebarView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
                 .help("清空当前对话")
             }
         }
@@ -220,11 +230,12 @@ public struct AISidebarView: View {
     @ViewBuilder
     private func insightCard(for clip: ClipItem) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(spacing: 8) {
                 Label("AI 快读解读", systemImage: "sparkles")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.purple)
-                Spacer()
+                    .lineLimit(1)
+                Spacer(minLength: 6)
                 if appState.isGeneratingInsight {
                     ProgressView().controlSize(.small)
                 } else {
@@ -233,6 +244,7 @@ public struct AISidebarView: View {
                     }
                     .controlSize(.small)
                     .buttonStyle(.bordered)
+                    .fixedSize()
                 }
                 if clip.aiInsight != nil {
                     Button {
@@ -243,6 +255,7 @@ public struct AISidebarView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .fixedSize()
                 }
             }
 
@@ -282,16 +295,22 @@ public struct AISidebarView: View {
                 }
 
                 if !insight.suggestedTags.isEmpty {
-                    HStack {
-                        ForEach(insight.suggestedTags, id: \.self) { tag in
-                            Text("#\(tag)")
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.1))
-                                .clipShape(Capsule())
+                    HStack(spacing: 6) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 5) {
+                                ForEach(insight.suggestedTags, id: \.self) { tag in
+                                    Text("#\(tag)")
+                                        .font(.caption2)
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.purple.opacity(0.1))
+                                        .clipShape(Capsule())
+                                }
+                            }
                         }
-                        Spacer()
+                        .frame(minWidth: 0, maxWidth: .infinity)
+
                         Button("采纳标签") {
                             var updated = clip
                             for t in insight.suggestedTags where !updated.tags.contains(t) {
@@ -306,12 +325,14 @@ public struct AISidebarView: View {
                         }
                         .font(.caption)
                         .buttonStyle(.link)
+                        .fixedSize()
                     }
                 }
             } else if clip.aiInsight == nil {
                 Text("点击「一键解读」，让 \(appState.settings.activeProvider.name) 快速提炼摘要、核心论点与推荐标签。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)

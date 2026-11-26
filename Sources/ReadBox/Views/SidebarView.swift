@@ -153,21 +153,26 @@ public struct SidebarView: View {
                 Image(systemName: appState.vault.isUsingiCloudDrive ? "icloud.fill" : "folder.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(appState.vault.isUsingiCloudDrive ? .blue : .secondary)
+                    .fixedSize()
                 VStack(alignment: .leading, spacing: 1) {
                     Text(appState.vault.isUsingiCloudDrive ? "iCloud Drive 同步" : "本地知识库")
                         .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     Text(appState.settings.activeProvider.name + " · " + appState.settings.activeModelName)
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-                Spacer()
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 SettingsLink {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
                 .help("偏好设置 (⌘,)")
             }
             .padding(.horizontal, 12)
@@ -304,7 +309,9 @@ public struct SidebarView: View {
                 .foregroundStyle(tint)
                 .frame(width: 18)
             Text(title)
-            Spacer()
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
             if count > 0 {
                 Text("\(count)")
                     .font(.caption)

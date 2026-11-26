@@ -49,12 +49,13 @@ open build/ReadBox.app
 
 ```text
 Sources/ReadBox/
-├── ReadBoxApp.swift                   # @main entry, WindowGroup, MenuBarExtra, Settings scene, shortcuts (⌘N/⌘⇧N/⌘K/⌘F/⌘L/⌘⇧G/⌘R), onOpenURL
+├── main.swift                         # CLI/App entry: dispatches `--mcp` to `ReadBoxMCPStdioServer`, otherwise launches `ReadBoxApp.main()`
+├── ReadBoxApp.swift                   # SwiftUI App, WindowGroup, MenuBarExtra, Settings scene, shortcuts (⌘N/⌘⇧N/⌘K/⌘F/⌘L/⌘⇧G/⌘R), onOpenURL
 ├── State/
-│   └── AppState.swift                 # Single @MainActor ObservableObject store: navigation, CRUD (clips/folders/tags/highlights/docs), clipping, AI streaming, toasts
+│   └── AppState.swift                 # Single @MainActor ObservableObject store: navigation, CRUD (clips/folders/tags/highlights/docs), clipping, AI streaming, toasts, DistributedNotification live reload
 ├── Models/
 │   ├── Models.swift                   # ClipItem, ClipSourceType, HighlightItem, HighlightColor, AIInsight, FolderItem, TagItem, KnowledgeDoc
-│   └── AIAndSettingsModels.swift      # AIProviderProfile (presets: DeepSeek/OpenAI/Anthropic/Ollama), AIAPIFormat, ChatMessage, ReaderPreferences, SynthesisPromptTemplate, AppSettings
+│   └── AIAndSettingsModels.swift      # AIProviderProfile (presets: DeepSeek/OpenAI/Anthropic/Ollama), AIAPIFormat, ChatMessage, ReaderPreferences, SynthesisPromptTemplate, AppSettings (incl. `mcpAccessKey`)
 ├── Services/
 │   ├── VaultManager.swift             # Local-First disk I/O (iCloud Drive / local folder), settings persistence, export, welcome seeding, FTS5 indexing triggers
 │   ├── SearchDatabase.swift           # Thread-safe SQLite3 + FTS5 (`fts_docs`, `unicode61`) rebuildable full-text search index
@@ -65,6 +66,7 @@ Sources/ReadBox/
 │   ├── KeychainService.swift          # Stores AI provider API keys in macOS Keychain (`com.readbox.macos.apikeys`)
 │   ├── ClipboardMonitor.swift         # Polls NSPasteboard for URLs when enabled
 │   ├── GlobalHotKeyManager.swift      # Carbon HIToolbox system-wide global hotkey listener (no Accessibility prompt required) & shortcut formatter
+│   ├── MCPServer.swift                # Pure Swift JSON-RPC 2.0 stdio MCP server (`ReadBox --mcp --token <key>`), 19 full-CRUD tools, dynamic token check & live GUI refresh notification
 │   └── SyncAdapter.swift              # Reserved `VaultSyncAdapter` protocol stubs for future Obsidian / Notion integration
 ├── Views/
 │   ├── MainWorkspaceView.swift        # Root NavigationSplitView (Sidebar + Detail/Reader + Global AI Drawer + QuickSearch/Toast overlays) & MenuBarQuickSaveView
@@ -80,6 +82,7 @@ Sources/ReadBox/
 │   ├── SiteLoginView.swift            # Built-in WKWebView login browser sheet + manual Cookie header import (`SiteLoginBrowserSheet`)
 │   └── Components/
 │       ├── LiquidGlassStyle.swift     # `readBoxGlassSurface`, `readBoxGlassButton`, `readBoxSeamlessToolbar`, `ReadBoxGlassGroup`, `LiquidGlassCanvasBackground`
+│       ├── ResizableSplitView.swift   # Overflow-proof `ResizableTrailingSplitView` & `ResizableLeadingSplitView` (replaces nested `HSplitView` inside `NavigationSplitView`)
 │       ├── ReaderWebView.swift        # `ReaderWebView` (hosts `reader.html`) & `SimpleWebView` (live webpage / snapshot + DOM outerHTML extraction trigger)
 │       └── WYSIWYGEditorView.swift    # `WYSIWYGEditorView` (hosts `wysiwyg_editor.html`)
 └── Resources/
@@ -149,5 +152,5 @@ Sources/ReadBox/
 - **Liquid Glass styling**: Use the wrappers in `LiquidGlassStyle.swift` (`readBoxGlassSurface`, `readBoxGlassButton`, `ReadBoxGlassGroup`, `readBoxSeamlessToolbar`) instead of calling macOS 26 APIs directly, preserving macOS 14–15 fallbacks.
 - **Rebuildable search cache**: Treat `.readbox/index.sqlite` strictly as a derived cache; never store authoritative user data only in SQLite.
 - **No external SPM deps**: Keep `Package.swift` dependency-free unless explicitly requested by the user.
-- **Verification**: Always run `swift test` after code changes; run `NO_INSTALL=1 ./scripts/build-app.sh` (or `./scripts/build-app.sh` when asked to install) when verifying app packaging, resources, or UI builds.
+- **Verification & Auto-Install**: Always run `swift test` after code changes, and **automatically run `./scripts/build-app.sh`** upon completing development so the latest `build/ReadBox.app` is built and installed to `/Applications/ReadBox.app` without asking the user to run it manually.
 - **Keep this doc fresh**: If you add/remove top-level files, change vault storage formats, or alter JS bridge contracts, update `AGENTS.md` in the same task.

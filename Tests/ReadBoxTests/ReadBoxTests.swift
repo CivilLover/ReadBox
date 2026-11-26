@@ -258,4 +258,164 @@ final class ReadBoxTests: XCTestCase {
 
         XCTAssertTrue(FloatingURLParser.extractURLs(from: "普通一段中文文字没有链接").isEmpty)
     }
+
+    func testMCPServerAuthTokenAndFullReadWriteDeleteFlow() async throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ReadBoxMCPTest-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let vault = VaultManager(vaultPath: tmpDir.path)
+        var currentExpectedToken = AppSettings.generateMCPAccessKey()
+        XCTAssertTrue(currentExpectedToken.hasPrefix("rb_mcp_"))
+
+        // 1. Wrong token must be rejected on tools/call
+        let badHandler = ReadBoxMCPHandler(
+            vault: vault,
+            providedToken: "rb_mcp_wrong_token",
+            expectedTokenProvider: { currentExpectedToken },
+            notifyVaultChange: false
+        )
+        let deniedResp = await badHandler.handleMessage([
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": ["name": "list_clips", "arguments": [:]]
+        ])
+        let deniedResult = deniedResp?["result"] as? [String: Any]
+        XCTAssertEqual(deniedResult?["isError"] as? Bool, true)
+
+        // 2. Valid token passes initialize, tools/list, and full CRUD
+        let handler = ReadBoxMCPHandler(
+            vault: vault,
+            providedToken: currentExpectedToken,
+            expectedTokenProvider: { currentExpectedToken },
+            notifyVaultChange: false
+        )
+
+        let initResp = await handler.handleMessage([
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "initialize",
+            "params": ["protocolVersion": "2024-11-05"]
+        ])
+        let initResult = initResp?["result"] as? [String: Any]
+        XCTAssertEqual((initResult?["serverInfo"] as? [String: Any])?["name"] as? String, "readbox")
+
+        let listToolsResp = await handler.handleMessage([
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/list"
+        ])
+        let tools = ((listToolsResp?["result"] as? [String: Any])?["tools"] as? [[String: Any]]) ?? []
+        XCTAssertEqual(tools.count, 19)
+
+        // Helper to invoke a tool and parse JSON text payload
+        func callTool(_ name: String, args: [String: Any]) async throws -> (isError: Bool, json: [String: Any]) {
+            let resp = await handler.handleMessage([
+                "jsonrpc": "2.0",
+                "id": UUID().uuidString,
+                "method": "tools/call",
+                "params": ["name": name, "arguments": args]
+            ])
+            let result = try XCTUnwrap(resp?["result"] as? [String: Any])
+            let isErr = (result["isError"] as? Bool) ?? false
+            let content = (result["content"] as? [[String: Any]])?.first?["text"] as? String ?? "{}"
+            let parsed = (try? JSONSerialization.jsonObject(with: Data(content.utf8)) as? [String: Any]) ?? [:]
+            return (isErr, parsed)
+        }
+
+        // Save clip from Markdown
+        let saved = try await callTool("save_clip_markdown", args: [
+            "title": "MCP 外部 Agent 协作架构",
+            "markdown": "# MCP 协作\n\n让外部 **AI Agent** 直接读写 ReadBox 本地知识库。",
+            "url": "https://example.com/mcp-arch",
+            "tags": ["MCP", "AI"]
+        ])
+        XCTAssertFalse(saved.isError)
+        let clipId = try XCTUnwrap(saved.json["clip_id"] as? String)
+
+        // Search via FTS5
+        let searched = try await callTool("search_clips", args: ["query": "ReadBox"])
+        XCTAssertFalse(searched.isError)
+        XCTAssertGreaterThanOrEqual((searched.json["count"] as? Int) ?? 0, 1)
+
+        // Write AI Insight
+        let insightRes = try await callTool("set_clip_insight", args: [
+            "clip_id": clipId,
+            "summary": "本文介绍了通过 stdio MCP 让外部 Agent 替代内置 AI 读写 ReadBox 的方案。",
+            "takeaways": ["零第三方依赖", "支持刷新访问密钥"],
+            "key_questions": ["如何保证实时界面同步？"],
+            "suggested_tags": ["效率"]
+        ])
+        XCTAssertFalse(insightRes.isError)
+
+        // Add -> Update -> Delete Highlight
+        let hlAdded = try await callTool("add_highlight", args: [
+            "clip_id": clipId,
+            "quote": "让外部 AI Agent 直接读写 ReadBox 本地知识库。",
+            "note": "核心定位",
+            "color": "purple"
+        ])
+        XCTAssertFalse(hlAdded.isError)
+        let hlId = try XCTUnwrap((hlAdded.json["highlight"] as? [String: Any])?["id"] as? String)
+
+        let hlUpdated = try await callTool("update_highlight", args: [
+            "clip_id": clipId,
+            "highlight_id": hlId,
+            "note": "已更新的批注",
+            "color": "green"
+        ])
+        XCTAssertFalse(hlUpdated.isError)
+
+        // Write & Append Clip Note
+        let note1 = try await callTool("update_clip_note", args: [
+            "clip_id": clipId,
+            "markdown": "## 初步想法\n很有价值。",
+            "mode": "replace"
+        ])
+        XCTAssertFalse(note1.isError)
+        let note2 = try await callTool("update_clip_note", args: [
+            "clip_id": clipId,
+            "markdown": "## 行动项\n- [ ] 接入 Claude Code",
+            "mode": "append"
+        ])
+        XCTAssertFalse(note2.isError)
+
+        // Verify get_clip reflects insight + highlight + appended note
+        let fetched = try await callTool("get_clip", args: ["clip_id": clipId])
+        XCTAssertFalse(fetched.isError)
+        XCTAssertEqual((fetched.json["ai_insight"] as? [String: Any])?["summary"] as? String,
+                       "本文介绍了通过 stdio MCP 让外部 Agent 替代内置 AI 读写 ReadBox 的方案。")
+        let noteText = fetched.json["note_markdown"] as? String ?? ""
+        XCTAssertTrue(noteText.contains("初步想法") && noteText.contains("接入 Claude Code"))
+        let hls = fetched.json["highlights"] as? [[String: Any]] ?? []
+        XCTAssertEqual(hls.count, 1)
+        XCTAssertEqual(hls.first?["note"] as? String, "已更新的批注")
+
+        // Delete highlight
+        let hlDeleted = try await callTool("delete_highlight", args: ["clip_id": clipId, "highlight_id": hlId])
+        XCTAssertFalse(hlDeleted.isError)
+
+        // Knowledge Doc create -> delete
+        let docSaved = try await callTool("save_knowledge_doc", args: [
+            "title": "MCP 专题沉淀",
+            "content": "整合外部 Agent 分析结果。",
+            "tags": ["MCP"],
+            "source_clip_ids": [clipId]
+        ])
+        XCTAssertFalse(docSaved.isError)
+        let docId = try XCTUnwrap(docSaved.json["doc_id"] as? String)
+
+        let docDeleted = try await callTool("delete_knowledge_doc", args: ["doc_id": docId])
+        XCTAssertFalse(docDeleted.isError)
+
+        // Delete clip
+        let clipDeleted = try await callTool("delete_clip", args: ["clip_id": clipId])
+        XCTAssertFalse(clipDeleted.isError)
+
+        // 3. Refreshing expected key immediately invalidates existing handler token
+        currentExpectedToken = AppSettings.generateMCPAccessKey()
+        let afterRefresh = try await callTool("list_clips", args: [:])
+        XCTAssertTrue(afterRefresh.isError)
+    }
 }

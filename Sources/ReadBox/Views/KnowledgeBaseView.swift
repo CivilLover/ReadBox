@@ -8,9 +8,15 @@ public struct KnowledgeBaseView: View {
     @State private var editableTitle: String = ""
     @State private var loadedDocId: String = ""
     @State private var newTagInput: String = ""
+    @AppStorage("readbox.knowledgeListWidth") private var docListWidth: Double = 270
 
     public var body: some View {
-        HSplitView {
+        ResizableLeadingSplitView(
+            leadingWidth: $docListWidth,
+            minLeadingWidth: 210,
+            maxLeadingWidth: 340,
+            minTrailingWidth: 300
+        ) {
             // Left Document List
             VStack(spacing: 0) {
                 HStack {
@@ -105,8 +111,8 @@ public struct KnowledgeBaseView: View {
                     .listStyle(.inset)
                 }
             }
-            .frame(minWidth: 250, idealWidth: 280, maxWidth: 340)
-
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } trailing: {
             // Right Full-Width Single-Pane WYSIWYG Editor
             if let doc = appState.activeKnowledgeDoc {
                 VStack(spacing: 0) {

@@ -20,13 +20,20 @@ public struct ReaderWorkspaceView: View {
     @State private var newTagInput = ""
     @State private var webExtractTrigger: Int = 0
     @State private var articleReloadToken: Int = 0
+    @AppStorage("readbox.readerRightPanelWidth") private var rightPanelWidth: Double = 380
 
     public var body: some View {
         VStack(spacing: 0) {
             readerTopToolbar
             Divider()
 
-            HSplitView {
+            ResizableTrailingSplitView(
+                isTrailingVisible: appState.isRightPanelOpen,
+                trailingWidth: $rightPanelWidth,
+                minLeadingWidth: 360,
+                minTrailingWidth: 280,
+                maxTrailingWidth: 540
+            ) {
                 // Left/Main Reading Pane
                 ZStack {
                     switch contentMode {
@@ -102,15 +109,14 @@ public struct ReaderWorkspaceView: View {
                         )
                     }
                 }
-                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } trailing: {
                 // Right Chrome-Side-Panel-Style Drawer (AI / WYSIWYG Note / Highlights)
-                if appState.isRightPanelOpen {
-                    rightInspectorPanel
-                        .frame(minWidth: 340, idealWidth: 410, maxWidth: 560, maxHeight: .infinity)
-                }
+                rightInspectorPanel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         .onAppear { syncNoteForCurrentClip() }
         .onChange(of: clip.id) { _, _ in syncNoteForCurrentClip() }
     }
@@ -123,17 +129,19 @@ public struct ReaderWorkspaceView: View {
     }
 
     private var readerTopToolbar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Button {
                 appState.activeClipId = nil
             } label: {
                 Label("返回", systemImage: "chevron.left")
                     .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+            .fixedSize()
 
-            Spacer()
+            Spacer(minLength: 8)
 
             // Cubox Signature Pill Mode Switcher: 文章 | 原网页 | 快照
             Picker("", selection: $contentMode) {
@@ -142,102 +150,106 @@ public struct ReaderWorkspaceView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 220)
+            .frame(minWidth: 150, idealWidth: 196, maxWidth: 210)
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            // Typography Aa Popover
-            Button {
-                showTypographyPopover.toggle()
-            } label: {
-                Image(systemName: "textformat.size")
-                    .font(.system(size: 13.5))
-            }
-            .buttonStyle(.borderless)
-            .help("阅读排版设置")
-            .popover(isPresented: $showTypographyPopover) {
-                typographyPopover
-            }
+            HStack(spacing: 8) {
+                // Typography Aa Popover
+                Button {
+                    showTypographyPopover.toggle()
+                } label: {
+                    Image(systemName: "textformat.size")
+                        .font(.system(size: 13.5))
+                }
+                .buttonStyle(.borderless)
+                .help("阅读排版设置")
+                .popover(isPresented: $showTypographyPopover) {
+                    typographyPopover
+                }
 
-            // Star
-            Button {
-                appState.toggleStar(clip)
-            } label: {
-                Image(systemName: clip.isStarred ? "star.fill" : "star")
-                    .foregroundStyle(clip.isStarred ? .orange : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help("星标")
+                // Star
+                Button {
+                    appState.toggleStar(clip)
+                } label: {
+                    Image(systemName: clip.isStarred ? "star.fill" : "star")
+                        .foregroundStyle(clip.isStarred ? .orange : .secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("星标")
 
-            // Folder Assignment Menu
-            Menu {
-                Button("收集箱（无收藏夹）") { appState.moveClip(clip, toFolderId: nil) }
-                Divider()
-                ForEach(appState.folders) { folder in
-                    Button {
-                        appState.moveClip(clip, toFolderId: folder.id)
-                    } label: {
-                        HStack {
-                            Text("\(folder.emoji) \(folder.name)")
-                            if clip.folderId == folder.id { Image(systemName: "checkmark") }
+                // Folder Assignment Menu
+                Menu {
+                    Button("收集箱（无收藏夹）") { appState.moveClip(clip, toFolderId: nil) }
+                    Divider()
+                    ForEach(appState.folders) { folder in
+                        Button {
+                            appState.moveClip(clip, toFolderId: folder.id)
+                        } label: {
+                            HStack {
+                                Text("\(folder.emoji) \(folder.name)")
+                                if clip.folderId == folder.id { Image(systemName: "checkmark") }
+                            }
                         }
                     }
+                } label: {
+                    Image(systemName: "folder")
                 }
-            } label: {
-                Image(systemName: "folder")
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("移动到收藏夹")
+
+                // Tag Editor Popover
+                Button {
+                    showTagEditor.toggle()
+                } label: {
+                    Image(systemName: "tag")
+                }
+                .buttonStyle(.borderless)
+                .help("管理标签")
+                .popover(isPresented: $showTagEditor) {
+                    tagPopover
+                }
+
+                // More Actions (Export / Synthesize / Open in Browser)
+                Menu {
+                    Button("✨ 沉淀本文为知识库文档") {
+                        appState.synthesisTargetClipIds = [clip.id]
+                        appState.showSynthesisSheet = true
+                    }
+                    Button("导出为 Markdown（含标注与笔记）…") {
+                        appState.exportClipToUserFolder(clip)
+                    }
+                    if !clip.url.isEmpty, let url = URL(string: clip.url) {
+                        Button("在默认浏览器打开原文") { NSWorkspace.shared.open(url) }
+                    }
+                    Divider()
+                    Button(clip.isArchived ? "取消归档" : "归档") { appState.toggleArchive(clip) }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                Divider().frame(height: 16)
+
+                // Right Side Panel Toggle (⌘L)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        appState.isRightPanelOpen.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.right")
+                        .foregroundStyle(appState.isRightPanelOpen ? Color.accentColor : .secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("展开/收起右侧 AI 与笔记栏 (⌘L)")
             }
-            .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("移动到收藏夹")
-
-            // Tag Editor Popover
-            Button {
-                showTagEditor.toggle()
-            } label: {
-                Image(systemName: "tag")
-            }
-            .buttonStyle(.borderless)
-            .help("管理标签")
-            .popover(isPresented: $showTagEditor) {
-                tagPopover
-            }
-
-            // More Actions (Export / Synthesize / Open in Browser)
-            Menu {
-                Button("✨ 沉淀本文为知识库文档") {
-                    appState.synthesisTargetClipIds = [clip.id]
-                    appState.showSynthesisSheet = true
-                }
-                Button("导出为 Markdown（含标注与笔记）…") {
-                    appState.exportClipToUserFolder(clip)
-                }
-                if !clip.url.isEmpty, let url = URL(string: clip.url) {
-                    Button("在默认浏览器打开原文") { NSWorkspace.shared.open(url) }
-                }
-                Divider()
-                Button(clip.isArchived ? "取消归档" : "归档") { appState.toggleArchive(clip) }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-
-            Divider().frame(height: 16)
-
-            // Right Side Panel Toggle (⌘L)
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    appState.isRightPanelOpen.toggle()
-                }
-            } label: {
-                Image(systemName: "sidebar.right")
-                    .foregroundStyle(appState.isRightPanelOpen ? Color.accentColor : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help("展开/收起右侧 AI 与笔记栏 (⌘L)")
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 9)
+        .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial)
     }
 
@@ -265,10 +277,14 @@ public struct ReaderWorkspaceView: View {
                         Text("单栏所见即所得 Markdown 笔记")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Spacer()
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 8)
                         Text("自动保存至 note.md")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
@@ -301,12 +317,15 @@ public struct ReaderWorkspaceView: View {
         return Button {
             appState.rightPanelTab = tab
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 11.5))
                 Text(label)
                     .font(.system(size: 12, weight: isActive ? .semibold : .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
+            .padding(.horizontal, 4)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(isActive ? Color(nsColor: .windowBackgroundColor) : Color.clear)

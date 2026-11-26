@@ -10,6 +10,10 @@ BUILD_NUMBER="${BUILD_NUMBER:-1}"
 UNIVERSAL="${UNIVERSAL:-0}"
 
 SWIFT_BUILD_ARGS=(-c release)
+if [ "${DISABLE_SANDBOX:-0}" = "1" ]; then
+  export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/tmp/readbox-clang-cache}"
+  SWIFT_BUILD_ARGS+=(--disable-sandbox -Xswiftc -module-cache-path -Xswiftc "${SWIFT_MODULE_CACHE_PATH:-/tmp/readbox-swift-cache}")
+fi
 if [ "$UNIVERSAL" = "1" ]; then
   echo "==> Building ReadBox v${APP_VERSION} (release, universal arm64 + x86_64)..."
   SWIFT_BUILD_ARGS+=(--arch arm64 --arch x86_64)

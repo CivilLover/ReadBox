@@ -418,6 +418,14 @@ public struct AppSettings: Codable, Sendable {
     public var tagSortOrder: SidebarSortOrder
     public var liquidGlass: LiquidGlassPreferences
     public var floatingCapture: FloatingCaptureSettings
+    public var mcpAccessKey: String
+
+    public static func generateMCPAccessKey() -> String {
+        let raw = (UUID().uuidString + UUID().uuidString)
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+        return "rb_mcp_\(raw.prefix(24))"
+    }
 
     public init(
         vaultPath: String,
@@ -438,7 +446,8 @@ public struct AppSettings: Codable, Sendable {
         folderSortOrder: SidebarSortOrder = .custom,
         tagSortOrder: SidebarSortOrder = .custom,
         liquidGlass: LiquidGlassPreferences = LiquidGlassPreferences(),
-        floatingCapture: FloatingCaptureSettings = FloatingCaptureSettings()
+        floatingCapture: FloatingCaptureSettings = FloatingCaptureSettings(),
+        mcpAccessKey: String = AppSettings.generateMCPAccessKey()
     ) {
         self.vaultPath = vaultPath
         self.activeProviderId = activeProviderId
@@ -454,13 +463,14 @@ public struct AppSettings: Codable, Sendable {
         self.tagSortOrder = tagSortOrder
         self.liquidGlass = liquidGlass
         self.floatingCapture = floatingCapture
+        self.mcpAccessKey = mcpAccessKey.isEmpty ? AppSettings.generateMCPAccessKey() : mcpAccessKey
     }
 
     enum CodingKeys: String, CodingKey {
         case vaultPath, activeProviderId, activeModelName, providers, reader
         case clipboardMonitorEnabled, autoInsightOnSave, customQuickPrompts
         case synthesisTemplates, defaultSynthesisTemplateId
-        case folderSortOrder, tagSortOrder, liquidGlass, floatingCapture
+        case folderSortOrder, tagSortOrder, liquidGlass, floatingCapture, mcpAccessKey
     }
 
     public init(from decoder: Decoder) throws {
@@ -484,6 +494,8 @@ public struct AppSettings: Codable, Sendable {
         self.tagSortOrder = try c.decodeIfPresent(SidebarSortOrder.self, forKey: .tagSortOrder) ?? .custom
         self.liquidGlass = try c.decodeIfPresent(LiquidGlassPreferences.self, forKey: .liquidGlass) ?? LiquidGlassPreferences()
         self.floatingCapture = try c.decodeIfPresent(FloatingCaptureSettings.self, forKey: .floatingCapture) ?? FloatingCaptureSettings()
+        let decodedKey = try c.decodeIfPresent(String.self, forKey: .mcpAccessKey) ?? ""
+        self.mcpAccessKey = decodedKey.isEmpty ? AppSettings.generateMCPAccessKey() : decodedKey
     }
 
     public var activeProvider: AIProviderProfile {

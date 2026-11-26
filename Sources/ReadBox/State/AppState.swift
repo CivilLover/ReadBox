@@ -146,6 +146,8 @@ public final class AppState: ObservableObject {
     @Published public var isFloatingClipVisible: Bool = false
     @Published public var hotKeyRegistrationError: String? = nil
     private var toastTask: Task<Void, Never>?
+    private var externalVaultObserver: NSObjectProtocol?
+    private var externalReloadTask: Task<Void, Never>?
     private let persistSettings: Bool
 
     public init(vaultPath: String? = nil, persistSettings: Bool = true) {
@@ -172,7 +174,36 @@ public final class AppState: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 self?.syncFloatingCaptureSystem()
             }
+            self.externalVaultObserver = DistributedNotificationCenter.default().addObserver(
+                forName: .readBoxVaultDidChange,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                let changedPath = note.object as? String
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if let changedPath, !changedPath.isEmpty, changedPath != self.vault.vaultURL.path {
+                        return
+                    }
+                    self.scheduleExternalVaultReload()
+                }
+            }
         }
+    }
+
+    private func scheduleExternalVaultReload() {
+        externalReloadTask?.cancel()
+        externalReloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.reloadVaultData()
+        }
+    }
+
+    public func refreshMCPAccessKey() {
+        settings.mcpAccessKey = AppSettings.generateMCPAccessKey()
+        saveSettingsSilently()
+        showToast("已刷新 MCP 访问密钥，请更新客户端配置")
     }
 
     public func reloadVaultData() {

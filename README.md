@@ -26,6 +26,10 @@ ReadBox 参考了 Cubox Mac 端的极简阅读美学，去掉了商业化云端�
 - **Local-First 明文存储与 iCloud Drive 同步**
   - 所有知识沉淀文档与收藏均以透明 `.md`（含 YAML Frontmatter）存放在磁盘，默认支持托管至 **iCloud Drive** 自动同步，也可随时切换或导出至任意本地文件夹。
   - 内置系统 `SQLite3` FTS5 实现毫秒级中文/英文全文检索（`⌘K` Spotlight 浮窗）。
+- **内置原生 Stdio MCP Server（接入外部 AI Agent）**
+  - 无需 Node/Python，通过 `/Applications/ReadBox.app/Contents/MacOS/ReadBox --mcp --token <密钥>` 即可把 ReadBox 接入 Claude Code、Cursor、Antigravity 等外部 Agent。
+  - 支持外部 Agent 进行 URL/Markdown 剪藏、全文检索、读取正文、写回「AI 快读解读」、增删改划词高亮批注、写入/追加侧边笔记、管理收藏夹/标签与知识沉淀文档；写入后实时通知运行中的 ReadBox 界面自动刷新。
+  - 在 **偏好设置 (`⌘,`) → MCP 集成** 中可随时一键复制客户端配置 JSON 或刷新访问密钥。
 
 ---
 
@@ -89,8 +93,10 @@ UNIVERSAL=1 NO_INSTALL=1 VERSION=0.1.0 ./scripts/build-app.sh
 VERSION=0.1.0 ./scripts/package-dmg.sh
 
 # 4. 启动 ReadBox
-open build/ReadBox.app
+open /Applications/ReadBox.app
 ```
+
+> **开发约定（Agent / 本地开发）**：每次代码开发完成并通过 `swift test` 后，应**自动执行 `./scripts/build-app.sh`** 重新打包并安装更新至 `/Applications/ReadBox.app`，避免手动重复打包。
 
 也可以直接用 Xcode 打开 `Package.swift` 进行调试与运行。
 

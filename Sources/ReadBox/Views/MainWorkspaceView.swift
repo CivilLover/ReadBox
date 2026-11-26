@@ -3,17 +3,24 @@ import SwiftUI
 /// Root Workspace combining Cubox-style Sidebar + Library/Reader/KnowledgeBase + optional Global AI Side Drawer + Toast & Search overlays.
 public struct MainWorkspaceView: View {
     @EnvironmentObject var appState: AppState
+    @AppStorage("readbox.globalAIDrawerWidth") private var globalAIDrawerWidth: Double = 360
 
     public var body: some View {
-        ZStack {
-            NavigationSplitView {
-                SidebarView()
-                    .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 280)
-            } detail: {
+        NavigationSplitView {
+            SidebarView()
+                .navigationSplitViewColumnWidth(min: 190, ideal: 225, max: 270)
+        } detail: {
+            Group {
                 if let activeClip = appState.activeClip {
                     ReaderWorkspaceView(clip: activeClip)
                 } else {
-                    HSplitView {
+                    ResizableTrailingSplitView(
+                        isTrailingVisible: appState.showGlobalAIDrawer,
+                        trailingWidth: $globalAIDrawerWidth,
+                        minLeadingWidth: 420,
+                        minTrailingWidth: 280,
+                        maxTrailingWidth: 500
+                    ) {
                         Group {
                             switch appState.destination {
                             case .knowledgeBase:
@@ -24,60 +31,56 @@ public struct MainWorkspaceView: View {
                                 LibraryContentView()
                             }
                         }
-                        .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
-
-                        if appState.showGlobalAIDrawer {
-                            VStack(spacing: 0) {
-                                HStack {
-                                    Label("AI 侧边栏（全库对话）", systemImage: "sparkles")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(.purple)
-                                    Spacer()
-                                    Button {
-                                        appState.showGlobalAIDrawer = false
-                                    } label: {
-                                        Image(systemName: "xmark")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } trailing: {
+                        VStack(spacing: 0) {
+                            HStack {
+                                Label("AI 侧边栏（全库对话）", systemImage: "sparkles")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(.purple)
+                                    .lineLimit(1)
+                                Spacer(minLength: 6)
+                                Button {
+                                    appState.showGlobalAIDrawer = false
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                Divider()
-                                AISidebarView(contextClip: nil)
+                                .buttonStyle(.plain)
                             }
-                            .frame(minWidth: 340, idealWidth: 390, maxWidth: 500, maxHeight: .infinity)
-                            .background(.ultraThinMaterial)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            Divider()
+                            AISidebarView(contextClip: nil)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.ultraThinMaterial)
                     }
                 }
             }
-            .readBoxSeamlessToolbar()
-
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        }
+        .readBoxSeamlessToolbar()
+        .overlay {
             // Cubox-style Global Search & AI Search Overlay
             if appState.showQuickSearchOverlay {
                 GlobalSearchOverlay()
                     .transition(.opacity)
             }
-
+        }
+        .overlay(alignment: .bottomTrailing) {
             // Bottom-Right Subtle Liquid Glass Toast Banner
             if let toast = appState.toastMessage {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Text(toast)
-                            .font(.system(size: 12.5, weight: .medium))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 9)
-                            .readBoxGlassSurface(in: Capsule())
-                            .shadow(color: .black.opacity(0.2), radius: 14, y: 5)
-                            .padding(20)
-                    }
-                }
-                .allowsHitTesting(false)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                Text(toast)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .readBoxGlassSurface(in: Capsule())
+                    .shadow(color: .black.opacity(0.2), radius: 14, y: 5)
+                    .padding(20)
+                    .allowsHitTesting(false)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .sheet(isPresented: $appState.showQuickAddSheet) {
@@ -88,7 +91,7 @@ public struct MainWorkspaceView: View {
             KnowledgeSynthesisSheet()
                 .environmentObject(appState)
         }
-        .frame(minWidth: 980, minHeight: 640)
+        .frame(minWidth: 880, minHeight: 580)
         .environment(\.readBoxGlassPreferences, appState.settings.liquidGlass)
         .preferredColorScheme(appState.settings.liquidGlass.appearance.colorScheme)
     }

@@ -87,8 +87,17 @@ public final class VaultManager {
     public func loadSettings() -> AppSettings {
         if let data = try? Data(contentsOf: Self.appSupportSettingsURL),
            var loaded = try? decoder.decode(AppSettings.self, from: data) {
+            var needsPersist = false
             if loaded.vaultPath.isEmpty {
                 loaded.vaultPath = vaultURL.path
+                needsPersist = true
+            }
+            if let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               (raw["mcpAccessKey"] as? String)?.isEmpty ?? true {
+                needsPersist = true
+            }
+            if needsPersist {
+                saveSettings(loaded)
             }
             return loaded
         }

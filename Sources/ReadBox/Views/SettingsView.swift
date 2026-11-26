@@ -24,6 +24,10 @@ public struct SettingsView: View {
                 .environmentObject(appState)
                 .tabItem { Label("站点登录 / Cookie", systemImage: "person.badge.key.fill") }
 
+            MCPSettingsTab()
+                .environmentObject(appState)
+                .tabItem { Label("MCP 集成", systemImage: "bolt.horizontal.circle.fill") }
+
             GeneralSettingsTab()
                 .environmentObject(appState)
                 .tabItem { Label("通用设置", systemImage: "gearshape") }
@@ -31,7 +35,7 @@ public struct SettingsView: View {
             IntegrationsTodoTab()
                 .tabItem { Label("生态集成 (TODO)", systemImage: "puzzlepiece.extension") }
         }
-        .frame(width: 700, height: 575)
+        .frame(width: 720, height: 590)
         .environment(\.readBoxGlassPreferences, appState.settings.liquidGlass)
     }
 }
@@ -756,6 +760,184 @@ private struct GeneralSettingsTab: View {
         }
         isRecordingHotKey = false
         recorderHint = nil
+    }
+}
+
+private struct MCPSettingsTab: View {
+    @EnvironmentObject var appState: AppState
+    @State private var configFormat: MCPConfigFormat = .json
+    @State private var selfCheckStatus: String? = nil
+    @State private var selfCheckOK: Bool = true
+    @State private var isChecking: Bool = false
+
+    private enum MCPConfigFormat: String, CaseIterable {
+        case json = "通用 JSON (Cursor / Antigravity / Claude)"
+        case claudeCLI = "Claude Code CLI 命令"
+    }
+
+    private var executablePath: String {
+        let installedPath = "/Applications/ReadBox.app/Contents/MacOS/ReadBox"
+        if FileManager.default.isExecutableFile(atPath: installedPath) {
+            return installedPath
+        }
+        return Bundle.main.executablePath ?? installedPath
+    }
+
+    private var generatedConfigSnippet: String {
+        let token = appState.settings.mcpAccessKey
+        switch configFormat {
+        case .json:
+            return """
+            {
+              "mcpServers": {
+                "readbox": {
+                  "command": "\(executablePath)",
+                  "args": ["--mcp", "--token", "\(token)"]
+                }
+              }
+            }
+            """
+        case .claudeCLI:
+            return "claude mcp add readbox -- \"\(executablePath)\" --mcp --token \"\(token)\""
+        }
+    }
+
+    var body: some View {
+        Form {
+            Section("MCP 访问密钥（Stdio 鉴权）") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("外部 AI Agent（如 Claude Code、Cursor、Antigravity）连接 ReadBox MCP 服务时必须携带此密钥。刷新密钥后，旧配置将立即失效。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(3)
+
+                    HStack(spacing: 8) {
+                        Text(appState.settings.mcpAccessKey)
+                            .font(.system(size: 12.5, design: .monospaced))
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+
+                        Button("复制密钥") {
+                            copyToPasteboard(appState.settings.mcpAccessKey, toast: "已复制 MCP 密钥")
+                        }
+                        .controlSize(.small)
+
+                        Button("刷新密钥") {
+                            appState.refreshMCPAccessKey()
+                            selfCheckStatus = nil
+                        }
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            Section("客户端配置（开箱即用）") {
+                Picker("配置格式", selection: $configFormat) {
+                    ForEach(MCPConfigFormat.allCases, id: \.self) { fmt in
+                        Text(fmt.rawValue).tag(fmt)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(generatedConfigSnippet)
+                        .font(.system(size: 11.5, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(Color(nsColor: .controlBackgroundColor))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                HStack(spacing: 10) {
+                    Button {
+                        copyToPasteboard(generatedConfigSnippet, toast: "已复制 MCP 客户端配置")
+                    } label: {
+                        Label("一键复制配置", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
+                    Button {
+                        runSelfCheck()
+                    } label: {
+                        Label(isChecking ? "正在自检…" : "自检 MCP 服务", systemImage: "checkmark.shield")
+                    }
+                    .controlSize(.small)
+                    .disabled(isChecking)
+
+                    Spacer()
+
+                    if let status = selfCheckStatus {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundStyle(selfCheckOK ? .green : .red)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Section("已开放能力与实时同步") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("• **完全读写权限**：支持 URL 抓取/Markdown 剪藏、全文检索与读取、写入 AI 快读解读、增删改划词高亮批注、写入/追加笔记、管理收藏夹/标签与知识沉淀文档。")
+                    Text("• **零依赖原生 Stdio**：无需运行 Node/Python，即使 ReadBox 主窗口未打开也可直接读写本地知识库（当前路径：`\(appState.vault.vaultURL.path)`）。")
+                    Text("• **实时界面刷新**：外部 Agent 写入或删除内容后，运行中的 ReadBox 会自动刷新列表与阅读器。")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineSpacing(3)
+                .padding(.vertical, 2)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func copyToPasteboard(_ value: String, toast: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        appState.showToast(toast)
+    }
+
+    private func runSelfCheck() {
+        isChecking = true
+        selfCheckStatus = nil
+        let token = appState.settings.mcpAccessKey
+        let vault = appState.vault
+        Task {
+            let handler = ReadBoxMCPHandler(
+                vault: vault,
+                providedToken: token,
+                expectedTokenProvider: { vault.loadSettings().mcpAccessKey },
+                notifyVaultChange: false
+            )
+            let listResp = await handler.handleMessage(["jsonrpc": "2.0", "id": 1, "method": "tools/list"])
+            let callResp = await handler.handleMessage([
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": ["name": "list_folders_and_tags", "arguments": [:]]
+            ])
+            await MainActor.run {
+                isChecking = false
+                let tools = ((listResp?["result"] as? [String: Any])?["tools"] as? [[String: Any]])?.count ?? 0
+                let callResult = callResp?["result"] as? [String: Any]
+                let isErr = (callResult?["isError"] as? Bool) ?? true
+                if !isErr && tools > 0 {
+                    selfCheckOK = true
+                    selfCheckStatus = "正常：鉴权通过，已就绪 \(tools) 个工具"
+                } else {
+                    selfCheckOK = false
+                    selfCheckStatus = "自检失败：请先保存设置或刷新密钥"
+                }
+            }
+        }
     }
 }
 

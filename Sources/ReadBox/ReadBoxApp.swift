@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 
-@main
 struct ReadBoxApp: App {
     @StateObject private var appState = AppState()
 
