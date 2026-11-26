@@ -286,14 +286,97 @@ public final class AppState: ObservableObject {
             )
 
             clips.insert(finalClip, at: 0)
-            showToast("已收藏：\(finalClip.title)")
+            if parsed.needsManualWebExtract {
+                showToast("已保存链接（原站限流/需登录）：打开后点「原网页 → 提取正文」即可离线保存")
+            } else {
+                showToast("已收藏：\(finalClip.title)")
+            }
 
-            if settings.autoInsightOnSave {
+            if settings.autoInsightOnSave && !parsed.needsManualWebExtract {
                 Task { await generateInsight(for: finalClip) }
             }
         } catch {
             showToast("收藏失败：\(error.localizedDescription)")
         }
+    }
+
+    /// Re-extracts clean offline article & localized images from live HTML rendered in the Reader's「原网页」WebView.
+    public func reextractClip(_ clip: ClipItem, fromRenderedHTML html: String) async -> Bool {
+        guard let url = URL(string: clip.url), !clip.url.isEmpty else { return false }
+        isClipping = true
+        defer { isClipping = false }
+
+        let assetsDir = vault.clipAssetsURL(for: clip)
+        let parsed = await clipper.parseRenderedHTML(html, sourceURL: url, assetsDirectory: assetsDir)
+        if parsed.needsManualWebExtract {
+            showToast("页面尚未加载出正文（请先完成站点登录/验证后再点提取）")
+            return false
+        }
+
+        var updated = clip
+        updated.title = parsed.title
+        updated.author = parsed.author
+        updated.excerpt = parsed.excerpt
+        updated.coverImageName = parsed.coverImageName ?? updated.coverImageName
+        updated.updatedAt = Date()
+
+        do {
+            try vault.saveClip(
+                updated,
+                articleHTML: parsed.cleanedHTML,
+                articleMarkdown: parsed.markdown,
+                snapshotHTML: parsed.snapshotHTML,
+                noteMarkdown: nil
+            )
+            if let idx = clips.firstIndex(where: { $0.id == updated.id }) {
+                clips[idx] = updated
+            }
+            showToast("已成功提取离线正文：\(updated.title)")
+            return true
+        } catch {
+            showToast("保存提取结果失败：\(error.localizedDescription)")
+            return false
+        }
+    }
+
+    public func moveClips(ids: [String], toFolderId folderId: String?) {
+        var movedCount = 0
+        for id in ids {
+            if let c = clips.first(where: { $0.id == id }) {
+                moveClip(c, toFolderId: folderId)
+                movedCount += 1
+            }
+        }
+        guard movedCount > 0 else { return }
+        if let fid = folderId, let f = folders.first(where: { $0.id == fid }) {
+            showToast("已将 \(movedCount) 篇移入「\(f.emoji) \(f.name)」")
+        } else {
+            showToast("已将 \(movedCount) 篇移回收集箱")
+        }
+    }
+
+    public func starClips(ids: [String]) {
+        var count = 0
+        for id in ids {
+            if var c = clips.first(where: { $0.id == id }), !c.isStarred {
+                c.isStarred = true
+                updateClip(c)
+                count += 1
+            }
+        }
+        if count > 0 { showToast("已为 \(count) 篇收藏添加星标") }
+    }
+
+    public func archiveClips(ids: [String]) {
+        var count = 0
+        for id in ids {
+            if var c = clips.first(where: { $0.id == id }), !c.isArchived {
+                c.isArchived = true
+                updateClip(c)
+                count += 1
+            }
+        }
+        if count > 0 { showToast("已归档 \(count) 篇收藏") }
     }
 
     public func addQuickTextClip(title: String, body: String, folderId: String? = nil, tags: [String] = []) {

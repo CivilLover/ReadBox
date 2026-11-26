@@ -29,21 +29,17 @@ public struct LibraryContentView: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
+            LiquidGlassCanvasBackground()
+
             VStack(spacing: 0) {
-                // Top Header Bar (Cubox style)
                 topHeaderBar
 
-                // Optional Clipboard Detection Banner
                 if let detected = appState.clipboardMonitor.detectedURL {
                     clipboardBanner(urlString: detected)
                 }
 
-                // Filter & View Switcher Bar
                 filterBar
 
-                Divider()
-
-                // Main Grid / List Content
                 if appState.filteredClips.isEmpty {
                     emptyStateView
                 } else {
@@ -51,6 +47,7 @@ public struct LibraryContentView: View {
                         if appState.viewMode == .cards {
                             LazyVGrid(columns: gridColumns, spacing: 14) {
                                 ForEach(appState.filteredClips) { clip in
+                                    let dragIds = dragIdsForClip(clip)
                                     ClipCardView(
                                         clip: clip,
                                         isSelected: appState.selectedClipIds.contains(clip.id),
@@ -65,16 +62,20 @@ public struct LibraryContentView: View {
                                     .onTapGesture {
                                         handleClipTap(clip)
                                     }
+                                    .draggable(dragIds.joined(separator: ",")) {
+                                        dragPreviewBadge(title: clip.title, count: dragIds.count)
+                                    }
                                     .contextMenu {
                                         clipContextMenu(clip)
                                     }
                                 }
                             }
                             .padding(20)
-                            .padding(.bottom, appState.isMultiSelectMode ? 76 : 16)
+                            .padding(.bottom, appState.isMultiSelectMode ? 84 : 20)
                         } else {
-                            LazyVStack(spacing: 6) {
+                            LazyVStack(spacing: 8) {
                                 ForEach(appState.filteredClips) { clip in
+                                    let dragIds = dragIdsForClip(clip)
                                     ClipListRowView(
                                         clip: clip,
                                         isSelected: appState.selectedClipIds.contains(clip.id),
@@ -82,45 +83,74 @@ public struct LibraryContentView: View {
                                         folderName: appState.folderName(for: clip.folderId)
                                     )
                                     .onTapGesture { handleClipTap(clip) }
+                                    .draggable(dragIds.joined(separator: ",")) {
+                                        dragPreviewBadge(title: clip.title, count: dragIds.count)
+                                    }
                                     .contextMenu { clipContextMenu(clip) }
                                 }
                             }
                             .padding(16)
-                            .padding(.bottom, appState.isMultiSelectMode ? 76 : 16)
+                            .padding(.bottom, appState.isMultiSelectMode ? 84 : 20)
                         }
                     }
                 }
             }
 
-            // Floating Batch Action Bar during multi-select
+            // Floating Liquid Glass Batch Action Bar
             if appState.isMultiSelectMode && !appState.selectedClipIds.isEmpty {
                 batchActionBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .padding(.bottom, 18)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func dragIdsForClip(_ clip: ClipItem) -> [String] {
+        if appState.isMultiSelectMode && appState.selectedClipIds.contains(clip.id) && appState.selectedClipIds.count > 1 {
+            return Array(appState.selectedClipIds)
+        }
+        return [clip.id]
+    }
+
+    private func dragPreviewBadge(title: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: count > 1 ? "doc.on.doc.fill" : "doc.text.fill")
+                .foregroundStyle(.blue)
+            Text(title)
+                .font(.system(size: 12.5, weight: .semibold))
+                .lineLimit(1)
+                .frame(maxWidth: 200, alignment: .leading)
+            if count > 1 {
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.blue)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .readBoxGlassSurface(in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var topHeaderBar: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(destinationTitle)
-                        .font(.system(size: 20, weight: .bold))
-                    Text("\(appState.filteredClips.count)")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12))
-                        .clipShape(Capsule())
-                }
+            HStack(spacing: 8) {
+                Text(destinationTitle)
+                    .font(.system(size: 22, weight: .bold))
+                Text("\(appState.filteredClips.count)")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .readBoxGlassSurface(in: Capsule())
             }
 
             Spacer()
 
-            // Spotlight Quick Search trigger
+            // Liquid Glass Spotlight Search Pill
             Button {
                 appState.showQuickSearchOverlay = true
             } label: {
@@ -131,31 +161,28 @@ public struct LibraryContentView: View {
                         .font(.system(size: 12.5))
                     Spacer()
                     Text("⌘K")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .frame(width: 210)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.08), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .frame(width: 215)
+                .readBoxGlassSurface(in: Capsule(), interactive: true)
             }
             .buttonStyle(.plain)
 
-            // Quick Add Clip Button
+            // Prominent Liquid Glass Quick Add Button
             Button {
                 appState.quickAddPrefillURL = ""
                 appState.showQuickAddSheet = true
             } label: {
                 Label("收藏", systemImage: "plus")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.system(size: 12.5, weight: .semibold))
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
+            .readBoxGlassButton(prominent: true, tint: .blue)
 
-            // Global AI Side Panel Toggle
+            // Liquid Glass AI Library Drawer Toggle
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     appState.showGlobalAIDrawer.toggle()
@@ -164,8 +191,7 @@ public struct LibraryContentView: View {
                 Label("AI 问全库", systemImage: "sparkles")
                     .font(.system(size: 12.5, weight: .medium))
             }
-            .buttonStyle(.bordered)
-            .tint(appState.showGlobalAIDrawer ? .purple : .secondary)
+            .readBoxGlassButton(prominent: appState.showGlobalAIDrawer, tint: .purple)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
@@ -192,7 +218,7 @@ public struct LibraryContentView: View {
                 appState.clipboardMonitor.dismissCurrent()
                 Task { await appState.addClipFromURL(target) }
             }
-            .buttonStyle(.borderedProminent)
+            .readBoxGlassButton(prominent: true, tint: .blue)
             .controlSize(.small)
 
             Button {
@@ -206,47 +232,57 @@ public struct LibraryContentView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(Color.accentColor.opacity(0.08))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor.opacity(0.2), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .readBoxGlassSurface(in: RoundedRectangle(cornerRadius: 14), tint: .blue.opacity(0.18))
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
 
     private var filterBar: some View {
-        HStack(spacing: 12) {
-            Menu {
-                ForEach(LibrarySortOrder.allCases, id: \.self) { order in
-                    Button {
-                        appState.sortOrder = order
-                    } label: {
-                        HStack {
-                            Text(order.rawValue)
-                            if appState.sortOrder == order { Image(systemName: "checkmark") }
+        HStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(LibrarySortOrder.allCases, id: \.self) { order in
+                        Button {
+                            appState.sortOrder = order
+                        } label: {
+                            HStack {
+                                Text(order.rawValue)
+                                if appState.sortOrder == order { Image(systemName: "checkmark") }
+                            }
                         }
                     }
+                } label: {
+                    Label(appState.sortOrder.rawValue, systemImage: "arrow.up.arrow.down")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
-            } label: {
-                Label(appState.sortOrder.rawValue, systemImage: "arrow.up.arrow.down")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+                .menuStyle(.borderlessButton)
+                .fixedSize()
 
-            Menu {
-                Button("不限来源") { appState.sourceFilter = nil }
-                Divider()
-                ForEach(ClipSourceType.allCases, id: \.self) { type in
-                    Button(type.displayName) { appState.sourceFilter = type }
+                Divider().frame(height: 12)
+
+                Menu {
+                    Button("不限来源") { appState.sourceFilter = nil }
+                    Divider()
+                    ForEach(ClipSourceType.allCases, id: \.self) { type in
+                        Button(type.displayName) { appState.sourceFilter = type }
+                    }
+                } label: {
+                    Label(appState.sourceFilter?.displayName ?? "不限来源", systemImage: "line.3.horizontal.decrease")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
-            } label: {
-                Label(appState.sourceFilter?.displayName ?? "不限来源", systemImage: "line.3.horizontal.decrease")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .readBoxGlassSurface(in: Capsule())
+
+            Text("提示：直接拖拽卡片到左侧收藏夹即可快速归类")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
 
             Spacer()
 
@@ -257,9 +293,11 @@ public struct LibraryContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .readBoxGlassSurface(in: Capsule())
             }
 
-            // AI Knowledge Synthesis shortcut
             Button {
                 if appState.isMultiSelectMode {
                     appState.isMultiSelectMode = false
@@ -271,7 +309,7 @@ public struct LibraryContentView: View {
                 Label(appState.isMultiSelectMode ? "退出多选" : "多选 / AI 沉淀", systemImage: appState.isMultiSelectMode ? "checkmark.circle.fill" : "checklist")
                     .font(.system(size: 12, weight: .medium))
             }
-            .buttonStyle(.bordered)
+            .readBoxGlassButton(prominent: appState.isMultiSelectMode, tint: .purple)
             .controlSize(.small)
 
             Picker("", selection: $appState.viewMode) {
@@ -293,17 +331,17 @@ public struct LibraryContentView: View {
                 .foregroundStyle(.tertiary)
             Text("这里还没有收藏内容")
                 .font(.headline)
-            Text("点击右上角「+ 收藏」或按 ⌘N 粘贴微信公众号 / 网页链接，开启你的 AI 阅读与知识沉淀。")
+            Text("点击左上角「+」或按 ⌘N 粘贴微信公众号 / 知乎 / 任意网页链接，开启你的 AI 阅读与知识沉淀。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
+                .frame(maxWidth: 380)
             Button {
                 appState.showQuickAddSheet = true
             } label: {
                 Label("立即收藏第一篇文章", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent)
+            .readBoxGlassButton(prominent: true, tint: .blue)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -322,26 +360,17 @@ public struct LibraryContentView: View {
             } label: {
                 Label("AI 归纳沉淀为知识库", systemImage: "sparkles")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.purple)
+            .readBoxGlassButton(prominent: true, tint: .purple)
 
             Menu("移入收藏夹") {
                 Button("收集箱（无收藏夹）") {
-                    for id in appState.selectedClipIds {
-                        if let c = appState.clips.first(where: { $0.id == id }) {
-                            appState.moveClip(c, toFolderId: nil)
-                        }
-                    }
+                    appState.moveClips(ids: Array(appState.selectedClipIds), toFolderId: nil)
                     appState.selectedClipIds.removeAll()
                 }
                 Divider()
                 ForEach(appState.folders) { folder in
                     Button("\(folder.emoji) \(folder.name)") {
-                        for id in appState.selectedClipIds {
-                            if let c = appState.clips.first(where: { $0.id == id }) {
-                                appState.moveClip(c, toFolderId: folder.id)
-                            }
-                        }
+                        appState.moveClips(ids: Array(appState.selectedClipIds), toFolderId: folder.id)
                         appState.selectedClipIds.removeAll()
                     }
                 }
@@ -349,14 +378,10 @@ public struct LibraryContentView: View {
             .menuStyle(.borderedButton)
 
             Button("归档") {
-                for id in appState.selectedClipIds {
-                    if let c = appState.clips.first(where: { $0.id == id }) {
-                        appState.toggleArchive(c)
-                    }
-                }
+                appState.archiveClips(ids: Array(appState.selectedClipIds))
                 appState.selectedClipIds.removeAll()
             }
-            .buttonStyle(.bordered)
+            .readBoxGlassButton()
 
             Button("取消") {
                 appState.selectedClipIds.removeAll()
@@ -367,10 +392,8 @@ public struct LibraryContentView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.16), radius: 18, y: 6)
+        .readBoxGlassSurface(in: Capsule())
+        .shadow(color: .black.opacity(0.22), radius: 22, y: 8)
     }
 
     private func handleClipTap(_ clip: ClipItem) {
@@ -420,7 +443,7 @@ public struct LibraryContentView: View {
     }
 }
 
-/// Cubox-style Detail Card (2-line title, 2-line excerpt, square rounded thumbnail, tag pills, metadata footer).
+/// Liquid Glass Detail Card (Cubox layout + frosted glass translucency + subtle specular rim light).
 public struct ClipCardView: View {
     let clip: ClipItem
     let isSelected: Bool
@@ -468,7 +491,7 @@ public struct ClipCardView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 68, height: 68)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
 
@@ -480,8 +503,8 @@ public struct ClipCardView: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 2)
-                            .background(Color.primary.opacity(0.06))
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .background(.primary.opacity(0.07))
+                            .clipShape(Capsule())
                     }
                     if clip.tags.count > 3 {
                         Text("+\(clip.tags.count - 3)")
@@ -504,16 +527,14 @@ public struct ClipCardView: View {
                     .lineLimit(1)
 
                 if let folderName {
-                    Text("·")
-                        .foregroundStyle(.tertiary)
+                    Text("·").foregroundStyle(.tertiary)
                     Text(folderName)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
-                Text("·")
-                    .foregroundStyle(.tertiary)
+                Text("·").foregroundStyle(.tertiary)
 
                 Text(Self.dateFmt.string(from: clip.createdAt))
                     .font(.system(size: 11))
@@ -527,8 +548,8 @@ public struct ClipCardView: View {
                         .foregroundStyle(Color(red: 0.45, green: 0.30, blue: 0.0))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1.5)
-                        .background(Color.yellow.opacity(0.65))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .background(Color.yellow.opacity(0.72))
+                        .clipShape(Capsule())
                 }
 
                 if !clip.isRead {
@@ -539,18 +560,24 @@ public struct ClipCardView: View {
             }
         }
         .padding(14)
-        .frame(height: 158)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .frame(height: 160)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(
-                    isSelected ? Color.accentColor : (isHovered ? Color.primary.opacity(0.18) : Color.primary.opacity(0.07)),
+                    isSelected
+                    ? AnyShapeStyle(Color.accentColor)
+                    : AnyShapeStyle(LinearGradient(
+                        colors: [.white.opacity(isHovered ? 0.38 : 0.2), .white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )),
                     lineWidth: isSelected ? 2 : 1
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(isHovered ? 0.08 : 0.03), radius: isHovered ? 8 : 3, y: 2)
-        .animation(.easeOut(duration: 0.14), value: isHovered)
+        .shadow(color: .black.opacity(isHovered ? 0.14 : 0.05), radius: isHovered ? 12 : 4, y: isHovered ? 4 : 2)
+        .scaleEffect(isHovered ? 1.008 : 1.0)
+        .animation(.easeOut(duration: 0.16), value: isHovered)
     }
 }
 
@@ -584,10 +611,10 @@ public struct ClipListRowView: View {
                 Text(folderName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 7)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(Color.primary.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .background(.primary.opacity(0.06))
+                    .clipShape(Capsule())
             }
             if !clip.highlights.isEmpty {
                 Text("\(clip.highlights.count) 标注")
@@ -600,10 +627,10 @@ public struct ClipListRowView: View {
                     .foregroundStyle(.orange)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : Color(nsColor: .controlBackgroundColor))
-        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary.opacity(0.06), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 9))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.14)) : AnyShapeStyle(.ultraThinMaterial))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.14), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

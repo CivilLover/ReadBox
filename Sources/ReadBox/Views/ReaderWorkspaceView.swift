@@ -18,6 +18,8 @@ public struct ReaderWorkspaceView: View {
     @State private var loadedNoteClipId: String = ""
     @State private var showTagEditor = false
     @State private var newTagInput = ""
+    @State private var webExtractTrigger: Int = 0
+    @State private var articleReloadToken: Int = 0
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -57,9 +59,38 @@ public struct ReaderWorkspaceView: View {
                                 appState.pendingScrollToHighlightId = nil
                             }
                         )
+                        .id("reader-\(clip.id)-\(articleReloadToken)")
                     case .webpage:
                         if let url = URL(string: clip.url), !clip.url.isEmpty {
-                            SimpleWebView(url: url, htmlString: nil, baseURL: nil)
+                            ZStack(alignment: .bottomTrailing) {
+                                SimpleWebView(
+                                    url: url,
+                                    htmlString: nil,
+                                    baseURL: nil,
+                                    extractTrigger: webExtractTrigger,
+                                    onExtractedHTML: { html in
+                                        Task {
+                                            let ok = await appState.reextractClip(clip, fromRenderedHTML: html)
+                                            if ok {
+                                                articleReloadToken += 1
+                                                contentMode = .article
+                                            }
+                                        }
+                                    }
+                                )
+
+                                Button {
+                                    webExtractTrigger += 1
+                                } label: {
+                                    Label(appState.isClipping ? "正在提取正文…" : "提取当前页正文（保存离线版）", systemImage: "sparkles")
+                                        .font(.system(size: 12.5, weight: .semibold))
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                }
+                                .readBoxGlassButton(prominent: true, tint: .blue)
+                                .disabled(appState.isClipping)
+                                .padding(18)
+                            }
                         } else {
                             ContentUnavailableView("本地速记无原始网址", systemImage: "doc.text")
                         }
@@ -207,19 +238,21 @@ public struct ReaderWorkspaceView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(.ultraThinMaterial)
     }
 
     private var rightInspectorPanel: some View {
         VStack(spacing: 0) {
-            // Segmented Tab Bar: AI 助手 | 笔记 | 标注
+            // Segmented Liquid Glass Tab Bar: AI 助手 | 笔记 | 标注
             HStack(spacing: 6) {
                 panelTabButton(.ai, icon: "sparkles", label: "AI 助手")
                 panelTabButton(.note, icon: "square.and.pencil", label: "笔记")
                 panelTabButton(.highlights, icon: "highlighter", label: "标注\(clip.highlights.isEmpty ? "" : " \(clip.highlights.count)")")
             }
-            .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+            .padding(6)
+            .readBoxGlassSurface(in: Capsule())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
 
             Divider()
 

@@ -48,7 +48,7 @@ public struct MainWorkspaceView: View {
                                 AISidebarView(contextClip: nil)
                             }
                             .frame(minWidth: 340, idealWidth: 390, maxWidth: 500, maxHeight: .infinity)
-                            .background(Color(nsColor: .windowBackgroundColor))
+                            .background(.ultraThinMaterial)
                         }
                     }
                 }
@@ -60,7 +60,7 @@ public struct MainWorkspaceView: View {
                     .transition(.opacity)
             }
 
-            // Bottom-Right Subtle Toast Banner
+            // Bottom-Right Subtle Liquid Glass Toast Banner
             if let toast = appState.toastMessage {
                 VStack {
                     Spacer()
@@ -68,12 +68,10 @@ public struct MainWorkspaceView: View {
                         Spacer()
                         Text(toast)
                             .font(.system(size: 12.5, weight: .medium))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .readBoxGlassSurface(in: Capsule())
+                            .shadow(color: .black.opacity(0.2), radius: 14, y: 5)
                             .padding(20)
                     }
                 }

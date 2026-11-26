@@ -81,4 +81,31 @@ final class ReadBoxTests: XCTestCase {
         XCTAssertEqual(insight.takeaways.count, 2)
         XCTAssertEqual(insight.suggestedFolder, "技术研发")
     }
+
+    func testZhihuSpecializedParserAndBlockedFallback() async {
+        let clipper = WebClipperService()
+        let tempAssets = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ReadBoxZhihuAssets-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempAssets) }
+        let url = URL(string: "https://zhuanlan.zhihu.com/p/771321843")!
+
+        // 1. Valid Zhihu HTML with Post-Title & Post-RichText
+        let zhihuHTML = """
+        <html><head><title>测试专栏 - 知乎</title></head><body>
+          <h1 class="Post-Title">深入理解 Liquid Glass 设计</h1>
+          <span class="AuthorInfo-name">知乎作者</span>
+          <div class="Post-RichText"><p>这是一篇超过四十个字符的知乎专栏测试正文，验证知乎专项解析器能够精准提取标题、作者与正文内容。</p></div>
+        </body></html>
+        """
+        let parsed = await clipper.parseRenderedHTML(zhihuHTML, sourceURL: url, assetsDirectory: tempAssets)
+        XCTAssertFalse(parsed.needsManualWebExtract)
+        XCTAssertEqual(parsed.title, "深入理解 Liquid Glass 设计")
+        XCTAssertTrue(parsed.markdown.contains("知乎专项解析器"))
+
+        // 2. Blocked 403 gate HTML gracefully returns manual-extract bookmark instead of crashing
+        let blockedHTML = "<html><body><h1>40362 安全验证</h1></body></html>"
+        let fallback = await clipper.parseRenderedHTML(blockedHTML, sourceURL: url, assetsDirectory: tempAssets)
+        XCTAssertTrue(fallback.needsManualWebExtract)
+        XCTAssertTrue(fallback.cleanedHTML.contains("原网页"))
+    }
 }

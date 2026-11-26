@@ -18,6 +18,8 @@ struct ReadBoxApp: App {
                     appState.handleIncomingURL(url)
                 }
         }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1240, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {

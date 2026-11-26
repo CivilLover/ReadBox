@@ -120,10 +120,8 @@ public struct QuickSearchOverlay: View {
                 }
             }
             .frame(width: 580)
-            .background(.regularMaterial)
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.12), lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.28), radius: 30, y: 12)
+            .readBoxGlassSurface(in: RoundedRectangle(cornerRadius: 20))
+            .shadow(color: .black.opacity(0.32), radius: 34, y: 14)
         }
         .onAppear { isFocused = true }
         .onExitCommand { appState.showQuickSearchOverlay = false }

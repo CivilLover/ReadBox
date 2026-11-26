@@ -197,14 +197,20 @@ public struct ReaderWebView: NSViewRepresentable {
     }
 }
 
-/// Simple WKWebView for viewing live Webpage or offline Snapshot HTML inside Reader tabs.
+/// Simple WKWebView for viewing live Webpage or offline Snapshot HTML inside Reader tabs,
+/// with persistent cookies and optional live DOM extraction callback for anti-bot/login sites (e.g. Zhihu).
 public struct SimpleWebView: NSViewRepresentable {
     public let url: URL?
     public let htmlString: String?
     public let baseURL: URL?
+    public var extractTrigger: Int = 0
+    public var onExtractedHTML: ((String) -> Void)? = nil
 
     public func makeNSView(context: Context) -> WKWebView {
-        let wv = WKWebView(frame: .zero)
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        let wv = WKWebView(frame: .zero, configuration: config)
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
         load(into: wv)
         return wv
     }
@@ -221,6 +227,18 @@ public struct SimpleWebView: NSViewRepresentable {
                 wv.load(URLRequest(url: url))
             }
         }
+
+        if extractTrigger != context.coordinator.lastExtractTrigger {
+            context.coordinator.lastExtractTrigger = extractTrigger
+            let callback = onExtractedHTML
+            wv.evaluateJavaScript("document.documentElement.outerHTML") { result, _ in
+                if let html = result as? String, !html.isEmpty {
+                    DispatchQueue.main.async {
+                        callback?(html)
+                    }
+                }
+            }
+        }
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -235,5 +253,6 @@ public struct SimpleWebView: NSViewRepresentable {
 
     public final class Coordinator {
         var lastLoadedKey: String = ""
+        var lastExtractTrigger: Int = 0
     }
 }
