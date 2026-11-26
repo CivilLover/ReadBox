@@ -311,12 +311,27 @@ public struct KnowledgeSynthesisSheet: View {
     @State private var selectedIds: Set<String> = []
     @State private var docTitle: String = ""
     @State private var tagsText: String = "知识沉淀"
-    @State private var userGoal: String = "请深度阅读我选中的收藏文章与标注，提炼核心共识、关键分歧与可落地的方法论，整理成一篇体系化的知识库沉淀文档。"
+    @State private var selectedTemplateId: String = ""
+    @State private var userGoal: String = ""
     @State private var generatedMarkdown: String = ""
     @State private var reasoningText: String = ""
     @State private var isGenerating: Bool = false
     @State private var errorMessage: String? = nil
     @State private var streamTask: Task<Void, Never>? = nil
+
+    // AI Prompt Template Generator popover state
+    @State private var showAITemplatePopover: Bool = false
+    @State private var aiTemplateBrief: String = ""
+    @State private var isDraftingTemplate: Bool = false
+    @State private var draftTemplateName: String = ""
+    @State private var draftTemplateEmoji: String = "✨"
+    @State private var draftTemplatePrompt: String = ""
+    @State private var templateGenError: String? = nil
+    @State private var setDraftAsDefault: Bool = false
+
+    private var selectedTemplate: SynthesisPromptTemplate? {
+        appState.settings.synthesisTemplates.first(where: { $0.id == selectedTemplateId })
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -372,13 +387,63 @@ public struct KnowledgeSynthesisSheet: View {
                     .listStyle(.bordered)
                     .frame(minHeight: 160)
 
-                    Text("2. 归纳目标 / 提示词")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                    HStack {
+                        Text("2. 分析提示词模板")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Button {
+                            templateGenError = nil
+                            showAITemplatePopover = true
+                        } label: {
+                            Label("AI 写新模板", systemImage: "wand.and.stars")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.link)
+                        .popover(isPresented: $showAITemplatePopover) {
+                            aiTemplateCreatorPopover
+                        }
+                    }
+
+                    // Template picker + set-as-default controls
+                    HStack(spacing: 6) {
+                        Picker("", selection: $selectedTemplateId) {
+                            ForEach(appState.settings.synthesisTemplates) { tpl in
+                                let suffix = tpl.id == appState.settings.defaultSynthesisTemplateId ? "（默认）" : ""
+                                Text("\(tpl.emoji) \(tpl.name)\(suffix)").tag(tpl.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .onChange(of: selectedTemplateId) { _, newId in
+                            if let tpl = appState.settings.synthesisTemplates.first(where: { $0.id == newId }) {
+                                userGoal = tpl.prompt
+                            }
+                        }
+
+                        if selectedTemplateId != appState.settings.defaultSynthesisTemplateId {
+                            Button("设为默认") {
+                                appState.settings.defaultSynthesisTemplateId = selectedTemplateId
+                                appState.saveSettings()
+                                appState.showToast("已设为默认分析模板")
+                            }
+                            .controlSize(.small)
+                        }
+
+                        if let tpl = selectedTemplate, !tpl.isBuiltIn {
+                            Button(role: .destructive) {
+                                deleteCustomTemplate(tpl)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("删除此自定义模板")
+                        }
+                    }
 
                     TextEditor(text: $userGoal)
                         .font(.system(size: 12.5))
-                        .frame(height: 76)
+                        .frame(height: 86)
                         .padding(4)
                         .background(Color(nsColor: .textBackgroundColor))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.1), lineWidth: 1))
@@ -397,8 +462,7 @@ public struct KnowledgeSynthesisSheet: View {
                                 Label("开始 AI 归纳", systemImage: "sparkles")
                                     .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.purple)
+                            .readBoxGlassButton(prominent: true, tint: .blue)
                             .disabled(selectedIds.isEmpty)
                         }
                     }
@@ -479,15 +543,146 @@ public struct KnowledgeSynthesisSheet: View {
                 .frame(minWidth: 380)
             }
         }
-        .frame(width: 820, height: 580)
+        .frame(width: 860, height: 610)
         .onAppear {
             selectedIds = Set(appState.synthesisTargetClipIds)
+            let def = appState.settings.defaultSynthesisTemplate
+            selectedTemplateId = def.id
+            userGoal = def.prompt
             if docTitle.isEmpty {
                 let df = DateFormatter()
                 df.dateFormat = "yyyy-MM-dd"
                 docTitle = "知识沉淀-\(df.string(from: Date()))"
             }
         }
+    }
+
+    private var aiTemplateCreatorPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("让 AI 帮你写分析提示词模板", systemImage: "wand.and.stars")
+                .font(.headline)
+
+            Text("用一句话描述你想怎么分析文章（例如：「分析 AI 产品商业模式与护城河」或「拆解技术方案性能瓶颈与成本」）：")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                TextField("输入你的分析需求…", text: $aiTemplateBrief)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { draftTemplateWithAI() }
+
+                Button {
+                    draftTemplateWithAI()
+                } label: {
+                    if isDraftingTemplate {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("AI 生成")
+                    }
+                }
+                .readBoxGlassButton(prominent: true, tint: .blue)
+                .disabled(aiTemplateBrief.trimmingCharacters(in: .whitespaces).isEmpty || isDraftingTemplate)
+            }
+
+            if let err = templateGenError {
+                Text("⚠️ \(err)")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Divider()
+
+            HStack(spacing: 8) {
+                TextField("Emoji", text: $draftTemplateEmoji)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 48)
+                TextField("模板名称（如：产品商业拆解）", text: $draftTemplateName)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            TextEditor(text: $draftTemplatePrompt)
+                .font(.system(size: 12.5))
+                .frame(height: 110)
+                .padding(4)
+                .background(Color(nsColor: .textBackgroundColor))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Toggle("保存后同时设为默认模板", isOn: $setDraftAsDefault)
+                .font(.caption)
+
+            HStack {
+                Spacer()
+                Button("取消") { showAITemplatePopover = false }
+                Button("保存到模板库") {
+                    saveDraftTemplate()
+                }
+                .readBoxGlassButton(prominent: true, tint: .blue)
+                .disabled(draftTemplateName.trimmingCharacters(in: .whitespaces).isEmpty || draftTemplatePrompt.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 420)
+    }
+
+    private func draftTemplateWithAI() {
+        let brief = aiTemplateBrief.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !brief.isEmpty else { return }
+        isDraftingTemplate = true
+        templateGenError = nil
+        let provider = appState.settings.activeProvider
+        let model = appState.settings.activeModelName
+        let apiKey = KeychainService.shared.loadAPIKey(forProviderId: provider.id)
+
+        Task {
+            do {
+                let tpl = try await appState.aiService.generatePromptTemplate(
+                    requirement: brief,
+                    provider: provider,
+                    model: model,
+                    apiKey: apiKey
+                )
+                draftTemplateName = tpl.name
+                draftTemplateEmoji = tpl.emoji
+                draftTemplatePrompt = tpl.prompt
+            } catch {
+                templateGenError = error.localizedDescription
+            }
+            isDraftingTemplate = false
+        }
+    }
+
+    private func saveDraftTemplate() {
+        let tpl = SynthesisPromptTemplate(
+            name: draftTemplateName.trimmingCharacters(in: .whitespacesAndNewlines),
+            emoji: draftTemplateEmoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "✨" : draftTemplateEmoji.trimmingCharacters(in: .whitespacesAndNewlines),
+            prompt: draftTemplatePrompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            isBuiltIn: false
+        )
+        appState.settings.synthesisTemplates.append(tpl)
+        if setDraftAsDefault {
+            appState.settings.defaultSynthesisTemplateId = tpl.id
+        }
+        appState.saveSettings()
+        selectedTemplateId = tpl.id
+        userGoal = tpl.prompt
+        aiTemplateBrief = ""
+        draftTemplateName = ""
+        draftTemplatePrompt = ""
+        setDraftAsDefault = false
+        showAITemplatePopover = false
+        appState.showToast("已保存新模板：\(tpl.emoji) \(tpl.name)")
+    }
+
+    private func deleteCustomTemplate(_ tpl: SynthesisPromptTemplate) {
+        appState.settings.synthesisTemplates.removeAll { $0.id == tpl.id }
+        if appState.settings.defaultSynthesisTemplateId == tpl.id {
+            appState.settings.defaultSynthesisTemplateId = SynthesisPromptTemplate.builtInPresets[0].id
+        }
+        appState.saveSettings()
+        let fallback = appState.settings.defaultSynthesisTemplate
+        selectedTemplateId = fallback.id
+        userGoal = fallback.prompt
     }
 
     private func startSynthesis() {

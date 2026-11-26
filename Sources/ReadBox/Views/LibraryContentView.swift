@@ -408,21 +408,41 @@ public struct LibraryContentView: View {
     }
 
     private var batchActionBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
             Text("已选 \(appState.selectedClipIds.count) 篇")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
 
-            Divider().frame(height: 18)
+            batchHairline
 
             Button {
                 appState.synthesisTargetClipIds = Array(appState.selectedClipIds)
                 appState.showSynthesisSheet = true
             } label: {
-                Label("AI 归纳沉淀为知识库", systemImage: "sparkles")
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.blue, Color.indigo, Color.purple],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Text("AI 归纳沉淀")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.primary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
             }
-            .readBoxGlassButton(prominent: true, tint: .purple)
+            .buttonStyle(.plain)
 
-            Menu("移入收藏夹") {
+            batchHairline
+
+            Menu {
                 Button("收集箱（无收藏夹）") {
                     appState.moveClips(ids: Array(appState.selectedClipIds), toFolderId: nil)
                     appState.selectedClipIds.removeAll()
@@ -434,26 +454,64 @@ public struct LibraryContentView: View {
                         appState.selectedClipIds.removeAll()
                     }
                 }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 11.5))
+                    Text("移入收藏夹")
+                        .font(.system(size: 12.5, weight: .medium))
+                }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
-            .menuStyle(.borderedButton)
+            .menuStyle(.borderlessButton)
+            .fixedSize()
 
-            Button("归档") {
+            batchHairline
+
+            Button {
                 appState.archiveClips(ids: Array(appState.selectedClipIds))
                 appState.selectedClipIds.removeAll()
-            }
-            .readBoxGlassButton()
-
-            Button("取消") {
-                appState.selectedClipIds.removeAll()
-                appState.isMultiSelectMode = false
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 11.5))
+                    Text("归档")
+                        .font(.system(size: 12.5, weight: .medium))
+                }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+
+            batchHairline
+
+            Button {
+                appState.selectedClipIds.removeAll()
+                appState.isMultiSelectMode = false
+            } label: {
+                Text("取消")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
-        .readBoxGlassSurface(in: Capsule())
-        .shadow(color: .black.opacity(0.22), radius: 22, y: 8)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
+        .readBoxGlassSurface(in: Capsule(), interactive: true)
+        .shadow(color: .black.opacity(0.24), radius: 22, y: 8)
+    }
+
+    private var batchHairline: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.14))
+            .frame(width: 1, height: 15)
     }
 
     private func handleClipTap(_ clip: ClipItem) {

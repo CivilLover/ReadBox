@@ -143,6 +143,66 @@ public struct ReaderPreferences: Codable, Hashable, Sendable {
     public init() {}
 }
 
+public struct SynthesisPromptTemplate: Identifiable, Codable, Hashable, Sendable {
+    public var id: String
+    public var name: String
+    public var emoji: String
+    public var prompt: String
+    public var isBuiltIn: Bool
+
+    public init(
+        id: String = UUID().uuidString,
+        name: String,
+        emoji: String = "✨",
+        prompt: String,
+        isBuiltIn: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.emoji = emoji
+        self.prompt = prompt
+        self.isBuiltIn = isBuiltIn
+    }
+
+    public static let builtInPresets: [SynthesisPromptTemplate] = [
+        SynthesisPromptTemplate(
+            id: "tpl-knowledge-system",
+            name: "体系化知识沉淀",
+            emoji: "📚",
+            prompt: "请深度阅读我选中的收藏文章、高亮与笔记，去伪存真，提炼出核心共识、关键分歧、底层框架与可复用方法论，按「背景脉络 → 核心观点 → 对比与分歧 → 可落地启发」整理成一篇结构清晰的个人知识库文档。",
+            isBuiltIn: true
+        ),
+        SynthesisPromptTemplate(
+            id: "tpl-compare-matrix",
+            name: "多源观点对比矩阵",
+            emoji: "⚖️",
+            prompt: "请重点对比选中各篇文章的核心立场、关键论据、优势局限与适用场景。先用一张 Markdown 对比表格横向总览，再提炼各方最值得借鉴的观点，最后给出面向个人实践的综合判断。",
+            isBuiltIn: true
+        ),
+        SynthesisPromptTemplate(
+            id: "tpl-action-sop",
+            name: "实战行动清单 (SOP)",
+            emoji: "🛠️",
+            prompt: "请过滤掉空泛的背景铺垫，只从选中资料中提炼可直接落地的执行步骤、关键工具/参数、常见避坑点，输出一份带 `- [ ]` 待办复选框的实战操作手册（SOP）。",
+            isBuiltIn: true
+        ),
+        SynthesisPromptTemplate(
+            id: "tpl-critical-thinking",
+            name: "深度批判与思维延伸",
+            emoji: "🧠",
+            prompt: "请像资深研究顾问一样审视这些文章：拆解作者隐含的前提假设、可能存在的盲区与反例，找出最反直觉的 3 个洞见，并在文末提出 3–5 个值得继续深挖的研究问题。",
+            isBuiltIn: true
+        ),
+        SynthesisPromptTemplate(
+            id: "tpl-weekly-digest",
+            name: "阅读周报 / 精华速览",
+            emoji: "📰",
+            prompt: "请用流畅、克制、信息密度高的周报口吻，把这些收藏串成一篇 3 分钟能读完的专题导读：包含「本期核心主题」「逐篇一句话精华」「跨文章串联启发」。",
+            isBuiltIn: true
+        )
+    ]
+}
+
 public struct AppSettings: Codable, Sendable {
     public var vaultPath: String
     public var activeProviderId: String
@@ -152,6 +212,8 @@ public struct AppSettings: Codable, Sendable {
     public var clipboardMonitorEnabled: Bool
     public var autoInsightOnSave: Bool
     public var customQuickPrompts: [String]
+    public var synthesisTemplates: [SynthesisPromptTemplate]
+    public var defaultSynthesisTemplateId: String
 
     public init(
         vaultPath: String,
@@ -166,7 +228,9 @@ public struct AppSettings: Codable, Sendable {
             "提炼这篇文章最反直觉的观点",
             "列出可以立即落地的行动清单",
             "把它整理成一份结构化的知识卡片"
-        ]
+        ],
+        synthesisTemplates: [SynthesisPromptTemplate] = SynthesisPromptTemplate.builtInPresets,
+        defaultSynthesisTemplateId: String = "tpl-knowledge-system"
     ) {
         self.vaultPath = vaultPath
         self.activeProviderId = activeProviderId
@@ -176,9 +240,42 @@ public struct AppSettings: Codable, Sendable {
         self.clipboardMonitorEnabled = clipboardMonitorEnabled
         self.autoInsightOnSave = autoInsightOnSave
         self.customQuickPrompts = customQuickPrompts
+        self.synthesisTemplates = synthesisTemplates
+        self.defaultSynthesisTemplateId = defaultSynthesisTemplateId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case vaultPath, activeProviderId, activeModelName, providers, reader
+        case clipboardMonitorEnabled, autoInsightOnSave, customQuickPrompts
+        case synthesisTemplates, defaultSynthesisTemplateId
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.vaultPath = try c.decodeIfPresent(String.self, forKey: .vaultPath) ?? ""
+        self.activeProviderId = try c.decodeIfPresent(String.self, forKey: .activeProviderId) ?? "deepseek"
+        self.activeModelName = try c.decodeIfPresent(String.self, forKey: .activeModelName) ?? "deepseek-chat"
+        self.providers = try c.decodeIfPresent([AIProviderProfile].self, forKey: .providers) ?? AIProviderProfile.presets
+        self.reader = try c.decodeIfPresent(ReaderPreferences.self, forKey: .reader) ?? ReaderPreferences()
+        self.clipboardMonitorEnabled = try c.decodeIfPresent(Bool.self, forKey: .clipboardMonitorEnabled) ?? true
+        self.autoInsightOnSave = try c.decodeIfPresent(Bool.self, forKey: .autoInsightOnSave) ?? false
+        self.customQuickPrompts = try c.decodeIfPresent([String].self, forKey: .customQuickPrompts) ?? [
+            "用 3 句话总结核心结论",
+            "提炼这篇文章最反直觉的观点",
+            "列出可以立即落地的行动清单",
+            "把它整理成一份结构化的知识卡片"
+        ]
+        self.synthesisTemplates = try c.decodeIfPresent([SynthesisPromptTemplate].self, forKey: .synthesisTemplates) ?? SynthesisPromptTemplate.builtInPresets
+        self.defaultSynthesisTemplateId = try c.decodeIfPresent(String.self, forKey: .defaultSynthesisTemplateId) ?? "tpl-knowledge-system"
     }
 
     public var activeProvider: AIProviderProfile {
         providers.first(where: { $0.id == activeProviderId }) ?? providers.first ?? AIProviderProfile.presets[0]
+    }
+
+    public var defaultSynthesisTemplate: SynthesisPromptTemplate {
+        synthesisTemplates.first(where: { $0.id == defaultSynthesisTemplateId })
+            ?? synthesisTemplates.first
+            ?? SynthesisPromptTemplate.builtInPresets[0]
     }
 }

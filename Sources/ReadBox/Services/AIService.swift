@@ -307,4 +307,41 @@ public final class AIService: Sendable {
         4. 不要机械复述每篇文章，要按「主题脉络 / 共识与分歧 / 可复用的方法论与启发」重组知识。
         """
     }
+
+    /// Generates a reusable high-quality synthesis prompt template from a 1-sentence user request.
+    public func generatePromptTemplate(
+        requirement: String,
+        provider: AIProviderProfile,
+        model: String,
+        apiKey: String
+    ) async throws -> SynthesisPromptTemplate {
+        let system = """
+        你是一位资深 Prompt 工程师，专门为「ReadBox 个人阅读与知识沉淀软件」编写高质量的多文章分析提示词模板。
+        请根据用户的一句话需求，严格返回合法 JSON（不要包裹 Markdown 代码块）：
+        {
+          "name": "简短清晰模板名（4-10个汉字）",
+          "emoji": "1个贴合主题的 Emoji",
+          "prompt": "结构清晰、可直接驱动大模型深度分析多篇收藏文章并输出高质量 Markdown 知识笔记的完整提示词（100-260字）"
+        }
+        """
+        let raw = try await completeOnce(
+            provider: provider,
+            model: model,
+            apiKey: apiKey,
+            systemPrompt: system,
+            userPrompt: "请为我生成满足以下需求的知识分析提示词模板：\(requirement)"
+        )
+        var cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let s = cleaned.firstIndex(of: "{"), let e = cleaned.lastIndex(of: "}") {
+            cleaned = String(cleaned[s...e])
+        }
+        if let data = cleaned.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let prompt = obj["prompt"] as? String, !prompt.isEmpty {
+            let name = (obj["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "自定义分析模板"
+            let emoji = (obj["emoji"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "✨"
+            return SynthesisPromptTemplate(name: name, emoji: emoji, prompt: prompt, isBuiltIn: false)
+        }
+        return SynthesisPromptTemplate(name: "AI 生成模板", emoji: "✨", prompt: cleaned, isBuiltIn: false)
+    }
 }
