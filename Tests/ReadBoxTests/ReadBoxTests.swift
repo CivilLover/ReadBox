@@ -200,4 +200,62 @@ final class ReadBoxTests: XCTestCase {
         let fullTextSnap = state.runGlobalSearch(query: "影史奇迹")
         XCTAssertTrue(fullTextSnap.fullTextClipHits.contains(where: { $0.clip.id == "clip-movie-1" }))
     }
+
+    func testFloatingCaptureSettingsRoundtripAndHotKeyFormatter() throws {
+        var settings = AppSettings(vaultPath: "/tmp/readbox-test")
+        settings.floatingCapture = FloatingCaptureSettings(
+            alwaysVisible: true,
+            globalHotKeyEnabled: true,
+            hotKeyCode: 15, // R
+            hotKeyModifiers: 2560, // ⌥⇧
+            autoHideAfterSave: false,
+            savedOriginX: 320.5,
+            savedOriginY: 640.0
+        )
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertEqual(decoded.floatingCapture, settings.floatingCapture)
+
+        // Legacy settings JSON without floatingCapture should decode with defaults
+        let legacyJSON = #"{"vaultPath":"/tmp/legacy","activeProviderId":"deepseek"}"#.data(using: .utf8)!
+        let legacyDecoded = try JSONDecoder().decode(AppSettings.self, from: legacyJSON)
+        XCTAssertEqual(legacyDecoded.floatingCapture, FloatingCaptureSettings.standard)
+
+        // HotKey formatting and validation
+        XCTAssertEqual(
+            GlobalHotKeyFormatter.displayString(
+                keyCode: FloatingCaptureSettings.defaultHotKeyCode,
+                carbonModifiers: FloatingCaptureSettings.defaultHotKeyModifiers
+            ),
+            "⌥⇧C"
+        )
+        XCTAssertTrue(GlobalHotKeyFormatter.isValidHotKey(keyCode: 8, carbonModifiers: 2560))
+        XCTAssertFalse(GlobalHotKeyFormatter.isValidHotKey(keyCode: 8, carbonModifiers: 0))
+        XCTAssertFalse(GlobalHotKeyFormatter.isValidHotKey(keyCode: 53, carbonModifiers: 2560))
+    }
+
+    func testFloatingURLParserExtractsFromShareTextAndBareDomains() {
+        let shareText = "推荐一篇好文章：深入解析 Liquid Glass https://mp.weixin.qq.com/s/abc123 值得一读"
+        XCTAssertEqual(
+            FloatingURLParser.extractURLs(from: shareText),
+            ["https://mp.weixin.qq.com/s/abc123"]
+        )
+
+        let multiLine = """
+        https://www.zhihu.com/question/123
+        https://example.com/post
+        """
+        XCTAssertEqual(
+            FloatingURLParser.extractURLs(from: multiLine),
+            ["https://www.zhihu.com/question/123", "https://example.com/post"]
+        )
+
+        XCTAssertEqual(
+            FloatingURLParser.extractURLs(from: "mp.weixin.qq.com/s/xyz"),
+            ["https://mp.weixin.qq.com/s/xyz"]
+        )
+
+        XCTAssertTrue(FloatingURLParser.extractURLs(from: "普通一段中文文字没有链接").isEmpty)
+    }
 }

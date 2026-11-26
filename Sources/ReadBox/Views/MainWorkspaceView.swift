@@ -146,6 +146,14 @@ public struct MenuBarQuickSaveView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button {
+                    appState.toggleFloatingClipPanel()
+                } label: {
+                    Text(appState.isFloatingClipVisible ? "隐藏悬浮窗" : "悬浮窗 (\(appState.floatingHotKeyDisplayString))")
+                }
+                .font(.caption)
+                .buttonStyle(.link)
+
                 Button("打开主窗口") {
                     NSApp.activate(ignoringOtherApps: true)
                     if let win = NSApp.windows.first(where: { $0.canBecomeMain }) {

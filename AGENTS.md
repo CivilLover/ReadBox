@@ -64,9 +64,11 @@ Sources/ReadBox/
 │   ├── AIService.swift                # Native URLSession SSE streaming client (OpenAI-compatible + DeepSeek `reasoning_content` + Anthropic native) & prompt builders
 │   ├── KeychainService.swift          # Stores AI provider API keys in macOS Keychain (`com.readbox.macos.apikeys`)
 │   ├── ClipboardMonitor.swift         # Polls NSPasteboard for URLs when enabled
+│   ├── GlobalHotKeyManager.swift      # Carbon HIToolbox system-wide global hotkey listener (no Accessibility prompt required) & shortcut formatter
 │   └── SyncAdapter.swift              # Reserved `VaultSyncAdapter` protocol stubs for future Obsidian / Notion integration
 ├── Views/
 │   ├── MainWorkspaceView.swift        # Root NavigationSplitView (Sidebar + Detail/Reader + Global AI Drawer + QuickSearch/Toast overlays) & MenuBarQuickSaveView
+│   ├── FloatingQuickClipPanel.swift   # Non-activating Liquid Glass floating NSPanel capsule for instant URL paste/drop-to-Inbox clipping & pin-on-desktop mode
 │   ├── SidebarView.swift              # Cubox-style left sidebar (Inbox, All, Unread, Starred, KnowledgeBase, Annotations, Archived, Untagged, nested Folders, Tags)
 │   ├── LibraryContentView.swift       # Clip list/card grid (`ClipCardView`, `ClipListRowView`), multi-select batch bar, clipboard banner, sort/filter toolbar
 │   ├── ReaderWorkspaceView.swift      # Reader view: 「文章 / 原网页 / 快照」 tabs, live WebView re-extract, right inspector (AI / Note / Highlights), typography popover

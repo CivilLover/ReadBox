@@ -36,6 +36,12 @@ struct ReadBoxApp: App {
             }
 
             CommandMenu("工作台") {
+                Button(appState.isFloatingClipVisible ? "隐藏悬浮收集窗" : "打开悬浮收集窗") {
+                    appState.toggleFloatingClipPanel()
+                }
+
+                Divider()
+
                 Button("全局搜索 / 提问 AI") {
                     if appState.showQuickSearchOverlay {
                         appState.showQuickSearchOverlay = false

@@ -595,9 +595,108 @@ private struct SiteLoginSettingsTab: View {
 
 private struct GeneralSettingsTab: View {
     @EnvironmentObject var appState: AppState
+    @State private var isRecordingHotKey: Bool = false
+    @State private var hotKeyMonitor: Any? = nil
+    @State private var recorderHint: String? = nil
+
+    private var isCustomHotKey: Bool {
+        appState.settings.floatingCapture.hotKeyCode != FloatingCaptureSettings.defaultHotKeyCode
+            || appState.settings.floatingCapture.hotKeyModifiers != FloatingCaptureSettings.defaultHotKeyModifiers
+    }
 
     var body: some View {
         Form {
+            Section("快捷悬浮收集窗（液态玻璃）") {
+                Toggle("始终在桌面显示悬浮收集窗", isOn: $appState.settings.floatingCapture.alwaysVisible)
+                    .onChange(of: appState.settings.floatingCapture.alwaysVisible) { _, newValue in
+                        if newValue {
+                            appState.saveSettings()
+                        } else {
+                            appState.hideFloatingClipPanel()
+                            appState.saveSettings()
+                        }
+                    }
+
+                Toggle("启用全局快捷键快速唤出 / 隐藏", isOn: $appState.settings.floatingCapture.globalHotKeyEnabled)
+                    .onChange(of: appState.settings.floatingCapture.globalHotKeyEnabled) { _, _ in
+                        stopRecordingHotKey()
+                        appState.saveSettings()
+                    }
+
+                HStack {
+                    Text("全局唤出快捷键")
+                    Spacer()
+
+                    if isRecordingHotKey {
+                        Text("请按下组合键（Esc 取消）…")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.blue)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.12))
+                            .overlay(Capsule().stroke(Color.blue.opacity(0.5), lineWidth: 1))
+                            .clipShape(Capsule())
+
+                        Button("取消") {
+                            stopRecordingHotKey()
+                        }
+                        .controlSize(.small)
+                    } else {
+                        Text(appState.floatingHotKeyDisplayString)
+                            .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 3.5)
+                            .background(Color.primary.opacity(0.07))
+                            .clipShape(Capsule())
+
+                        Button("录制快捷键") {
+                            startRecordingHotKey()
+                        }
+                        .controlSize(.small)
+                        .disabled(!appState.settings.floatingCapture.globalHotKeyEnabled)
+
+                        if isCustomHotKey {
+                            Button("恢复默认") {
+                                appState.settings.floatingCapture.hotKeyCode = FloatingCaptureSettings.defaultHotKeyCode
+                                appState.settings.floatingCapture.hotKeyModifiers = FloatingCaptureSettings.defaultHotKeyModifiers
+                                appState.saveSettings()
+                            }
+                            .controlSize(.small)
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+
+                if let hint = recorderHint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                if let err = appState.hotKeyRegistrationError {
+                    Text("⚠️ \(err)")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                Toggle("存入收集箱后自动收起悬浮窗（仅按需唤出模式）", isOn: $appState.settings.floatingCapture.autoHideAfterSave)
+                    .disabled(appState.settings.floatingCapture.alwaysVisible)
+                    .onChange(of: appState.settings.floatingCapture.autoHideAfterSave) { _, _ in
+                        appState.saveSettings()
+                    }
+
+                HStack {
+                    Text("在浏览器或微信复制文章链接后，按快捷键唤出悬浮窗或直接粘贴，回车即刻存入收集箱。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(appState.isFloatingClipVisible ? "隐藏悬浮窗" : "立即打开悬浮窗") {
+                        appState.toggleFloatingClipPanel()
+                    }
+                    .controlSize(.small)
+                }
+            }
+
             Section("采集效率") {
                 Toggle("自动监测剪贴板中的微信公众号 / 网页链接", isOn: $appState.settings.clipboardMonitorEnabled)
                 Toggle("收藏文章后自动调用 AI 生成快读解读", isOn: $appState.settings.autoInsightOnSave)
@@ -615,6 +714,48 @@ private struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        .onDisappear {
+            if isRecordingHotKey {
+                stopRecordingHotKey()
+                appState.syncFloatingCaptureSystem()
+            }
+        }
+    }
+
+    private func startRecordingHotKey() {
+        stopRecordingHotKey()
+        recorderHint = nil
+        isRecordingHotKey = true
+        appState.suspendGlobalHotKey()
+
+        hotKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 { // Escape cancels
+                stopRecordingHotKey()
+                appState.syncFloatingCaptureSystem()
+                return nil
+            }
+            let code = UInt32(event.keyCode)
+            let mods = GlobalHotKeyFormatter.carbonModifiers(from: event.modifierFlags)
+            if GlobalHotKeyFormatter.isValidHotKey(keyCode: code, carbonModifiers: mods) {
+                appState.settings.floatingCapture.hotKeyCode = code
+                appState.settings.floatingCapture.hotKeyModifiers = mods
+                stopRecordingHotKey()
+                appState.saveSettings()
+                return nil
+            } else {
+                recorderHint = "请同时按下 ⌘ / ⌥ / ⌃ 修饰键与一个字母或数字键"
+                return nil
+            }
+        }
+    }
+
+    private func stopRecordingHotKey() {
+        if let monitor = hotKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotKeyMonitor = nil
+        }
+        isRecordingHotKey = false
+        recorderHint = nil
     }
 }
 

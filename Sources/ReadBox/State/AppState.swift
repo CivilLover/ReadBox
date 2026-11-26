@@ -94,6 +94,9 @@ public final class AppState: ObservableObject {
     public let clipper = WebClipperService()
     public let aiService = AIService()
     public let clipboardMonitor = ClipboardMonitor()
+    public let globalHotKeyManager = GlobalHotKeyManager()
+    private var floatingClipController: FloatingQuickClipController?
+    private var registeredHotKeySignature: (Bool, UInt32, UInt32)?
 
     @Published public var settings: AppSettings
     @Published public var folders: [FolderItem] = []
@@ -140,6 +143,8 @@ public final class AppState: ObservableObject {
     // Background Clipping & Toast Feedback
     @Published public var isClipping: Bool = false
     @Published public var toastMessage: String? = nil
+    @Published public var isFloatingClipVisible: Bool = false
+    @Published public var hotKeyRegistrationError: String? = nil
     private var toastTask: Task<Void, Never>?
     private let persistSettings: Bool
 
@@ -161,6 +166,12 @@ public final class AppState: ObservableObject {
         self.reloadVaultData()
         if persistSettings && loadedSettings.clipboardMonitorEnabled {
             self.clipboardMonitor.start()
+        }
+        if persistSettings {
+            self.floatingClipController = FloatingQuickClipController(appState: self)
+            DispatchQueue.main.async { [weak self] in
+                self?.syncFloatingCaptureSystem()
+            }
         }
     }
 
@@ -202,6 +213,74 @@ public final class AppState: ObservableObject {
         } else {
             clipboardMonitor.stop()
         }
+        if persistSettings {
+            syncFloatingCaptureSystem()
+        }
+    }
+
+    public func saveSettingsSilently() {
+        if persistSettings {
+            vault.saveSettings(settings)
+        }
+    }
+
+    // MARK: - Floating Quick-Clip Panel & Global HotKey
+
+    public var floatingHotKeyDisplayString: String {
+        GlobalHotKeyFormatter.displayString(
+            keyCode: settings.floatingCapture.hotKeyCode,
+            carbonModifiers: settings.floatingCapture.hotKeyModifiers
+        )
+    }
+
+    public func toggleFloatingClipPanel() {
+        guard persistSettings else { return }
+        if floatingClipController == nil {
+            floatingClipController = FloatingQuickClipController(appState: self)
+        }
+        floatingClipController?.toggleVisibility()
+    }
+
+    public func showFloatingClipPanel() {
+        guard persistSettings else { return }
+        if floatingClipController == nil {
+            floatingClipController = FloatingQuickClipController(appState: self)
+        }
+        floatingClipController?.showAndFocus()
+    }
+
+    public func hideFloatingClipPanel() {
+        floatingClipController?.hide()
+    }
+
+    public func suspendGlobalHotKey() {
+        globalHotKeyManager.unregister()
+        registeredHotKeySignature = nil
+    }
+
+    public func syncFloatingCaptureSystem() {
+        guard persistSettings else { return }
+        let fc = settings.floatingCapture
+        let desiredSig = (fc.globalHotKeyEnabled, fc.hotKeyCode, fc.hotKeyModifiers)
+        let needsHotKeyUpdate = registeredHotKeySignature.map { $0 != desiredSig } ?? true
+
+        if needsHotKeyUpdate {
+            registeredHotKeySignature = desiredSig
+            if fc.globalHotKeyEnabled {
+                let ok = globalHotKeyManager.register(
+                    keyCode: fc.hotKeyCode,
+                    modifiers: fc.hotKeyModifiers
+                ) { [weak self] in
+                    self?.floatingClipController?.toggleFromHotKey()
+                }
+                hotKeyRegistrationError = ok ? nil : "快捷键 \(floatingHotKeyDisplayString) 可能与其他应用冲突，请换一个组合键"
+            } else {
+                globalHotKeyManager.unregister()
+                hotKeyRegistrationError = nil
+            }
+        }
+
+        floatingClipController?.syncWithSettings()
     }
 
     public func switchVaultDirectory(to url: URL) {
@@ -363,9 +442,10 @@ public final class AppState: ObservableObject {
 
     // MARK: - Clip CRUD & Web Clipping
 
-    public func addClipFromURL(_ rawURL: String, folderId: String? = nil, tags: [String] = []) async {
+    @discardableResult
+    public func addClipFromURL(_ rawURL: String, folderId: String? = nil, tags: [String] = []) async -> ClipItem? {
         let trimmed = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return nil }
 
         isClipping = true
         defer { isClipping = false }
@@ -418,8 +498,10 @@ public final class AppState: ObservableObject {
             if settings.autoInsightOnSave && !parsed.needsManualWebExtract {
                 Task { await generateInsight(for: finalClip) }
             }
+            return finalClip
         } catch {
             showToast("收藏失败：\(error.localizedDescription)")
+            return nil
         }
     }
 

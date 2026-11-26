@@ -352,6 +352,57 @@ public struct LiquidGlassPreferences: Codable, Hashable, Sendable {
     )
 }
 
+public struct FloatingCaptureSettings: Codable, Hashable, Sendable {
+    /// Carbon virtual keyCode (default: 8 = 'C')
+    public static let defaultHotKeyCode: UInt32 = 8
+    /// Carbon modifier flags (default: optionKey 2048 | shiftKey 512 = 2560 -> ⌥⇧C)
+    public static let defaultHotKeyModifiers: UInt32 = 2560
+
+    public var alwaysVisible: Bool
+    public var globalHotKeyEnabled: Bool
+    public var hotKeyCode: UInt32
+    public var hotKeyModifiers: UInt32
+    public var autoHideAfterSave: Bool
+    public var savedOriginX: Double?
+    public var savedOriginY: Double?
+
+    public init(
+        alwaysVisible: Bool = false,
+        globalHotKeyEnabled: Bool = true,
+        hotKeyCode: UInt32 = FloatingCaptureSettings.defaultHotKeyCode,
+        hotKeyModifiers: UInt32 = FloatingCaptureSettings.defaultHotKeyModifiers,
+        autoHideAfterSave: Bool = true,
+        savedOriginX: Double? = nil,
+        savedOriginY: Double? = nil
+    ) {
+        self.alwaysVisible = alwaysVisible
+        self.globalHotKeyEnabled = globalHotKeyEnabled
+        self.hotKeyCode = hotKeyCode
+        self.hotKeyModifiers = hotKeyModifiers
+        self.autoHideAfterSave = autoHideAfterSave
+        self.savedOriginX = savedOriginX
+        self.savedOriginY = savedOriginY
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case alwaysVisible, globalHotKeyEnabled, hotKeyCode, hotKeyModifiers
+        case autoHideAfterSave, savedOriginX, savedOriginY
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.alwaysVisible = try c.decodeIfPresent(Bool.self, forKey: .alwaysVisible) ?? false
+        self.globalHotKeyEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalHotKeyEnabled) ?? true
+        self.hotKeyCode = try c.decodeIfPresent(UInt32.self, forKey: .hotKeyCode) ?? Self.defaultHotKeyCode
+        self.hotKeyModifiers = try c.decodeIfPresent(UInt32.self, forKey: .hotKeyModifiers) ?? Self.defaultHotKeyModifiers
+        self.autoHideAfterSave = try c.decodeIfPresent(Bool.self, forKey: .autoHideAfterSave) ?? true
+        self.savedOriginX = try c.decodeIfPresent(Double.self, forKey: .savedOriginX)
+        self.savedOriginY = try c.decodeIfPresent(Double.self, forKey: .savedOriginY)
+    }
+
+    public static let standard = FloatingCaptureSettings()
+}
+
 public struct AppSettings: Codable, Sendable {
     public var vaultPath: String
     public var activeProviderId: String
@@ -366,6 +417,7 @@ public struct AppSettings: Codable, Sendable {
     public var folderSortOrder: SidebarSortOrder
     public var tagSortOrder: SidebarSortOrder
     public var liquidGlass: LiquidGlassPreferences
+    public var floatingCapture: FloatingCaptureSettings
 
     public init(
         vaultPath: String,
@@ -385,7 +437,8 @@ public struct AppSettings: Codable, Sendable {
         defaultSynthesisTemplateId: String = "tpl-knowledge-system",
         folderSortOrder: SidebarSortOrder = .custom,
         tagSortOrder: SidebarSortOrder = .custom,
-        liquidGlass: LiquidGlassPreferences = LiquidGlassPreferences()
+        liquidGlass: LiquidGlassPreferences = LiquidGlassPreferences(),
+        floatingCapture: FloatingCaptureSettings = FloatingCaptureSettings()
     ) {
         self.vaultPath = vaultPath
         self.activeProviderId = activeProviderId
@@ -400,13 +453,14 @@ public struct AppSettings: Codable, Sendable {
         self.folderSortOrder = folderSortOrder
         self.tagSortOrder = tagSortOrder
         self.liquidGlass = liquidGlass
+        self.floatingCapture = floatingCapture
     }
 
     enum CodingKeys: String, CodingKey {
         case vaultPath, activeProviderId, activeModelName, providers, reader
         case clipboardMonitorEnabled, autoInsightOnSave, customQuickPrompts
         case synthesisTemplates, defaultSynthesisTemplateId
-        case folderSortOrder, tagSortOrder, liquidGlass
+        case folderSortOrder, tagSortOrder, liquidGlass, floatingCapture
     }
 
     public init(from decoder: Decoder) throws {
@@ -429,6 +483,7 @@ public struct AppSettings: Codable, Sendable {
         self.folderSortOrder = try c.decodeIfPresent(SidebarSortOrder.self, forKey: .folderSortOrder) ?? .custom
         self.tagSortOrder = try c.decodeIfPresent(SidebarSortOrder.self, forKey: .tagSortOrder) ?? .custom
         self.liquidGlass = try c.decodeIfPresent(LiquidGlassPreferences.self, forKey: .liquidGlass) ?? LiquidGlassPreferences()
+        self.floatingCapture = try c.decodeIfPresent(FloatingCaptureSettings.self, forKey: .floatingCapture) ?? FloatingCaptureSettings()
     }
 
     public var activeProvider: AIProviderProfile {
