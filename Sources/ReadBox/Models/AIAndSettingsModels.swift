@@ -203,6 +203,22 @@ public struct SynthesisPromptTemplate: Identifiable, Codable, Hashable, Sendable
     ]
 }
 
+public enum SidebarSortOrder: String, Codable, CaseIterable, Sendable {
+    case custom = "custom"
+    case name = "name"
+    case createdAt = "createdAt"
+    case count = "count"
+
+    public var displayName: String {
+        switch self {
+        case .custom: return "自定义排序"
+        case .name: return "名称排序"
+        case .createdAt: return "创建时间排序"
+        case .count: return "数量排序"
+        }
+    }
+}
+
 public struct AppSettings: Codable, Sendable {
     public var vaultPath: String
     public var activeProviderId: String
@@ -214,6 +230,8 @@ public struct AppSettings: Codable, Sendable {
     public var customQuickPrompts: [String]
     public var synthesisTemplates: [SynthesisPromptTemplate]
     public var defaultSynthesisTemplateId: String
+    public var folderSortOrder: SidebarSortOrder
+    public var tagSortOrder: SidebarSortOrder
 
     public init(
         vaultPath: String,
@@ -230,7 +248,9 @@ public struct AppSettings: Codable, Sendable {
             "把它整理成一份结构化的知识卡片"
         ],
         synthesisTemplates: [SynthesisPromptTemplate] = SynthesisPromptTemplate.builtInPresets,
-        defaultSynthesisTemplateId: String = "tpl-knowledge-system"
+        defaultSynthesisTemplateId: String = "tpl-knowledge-system",
+        folderSortOrder: SidebarSortOrder = .custom,
+        tagSortOrder: SidebarSortOrder = .custom
     ) {
         self.vaultPath = vaultPath
         self.activeProviderId = activeProviderId
@@ -242,12 +262,15 @@ public struct AppSettings: Codable, Sendable {
         self.customQuickPrompts = customQuickPrompts
         self.synthesisTemplates = synthesisTemplates
         self.defaultSynthesisTemplateId = defaultSynthesisTemplateId
+        self.folderSortOrder = folderSortOrder
+        self.tagSortOrder = tagSortOrder
     }
 
     enum CodingKeys: String, CodingKey {
         case vaultPath, activeProviderId, activeModelName, providers, reader
         case clipboardMonitorEnabled, autoInsightOnSave, customQuickPrompts
         case synthesisTemplates, defaultSynthesisTemplateId
+        case folderSortOrder, tagSortOrder
     }
 
     public init(from decoder: Decoder) throws {
@@ -267,6 +290,8 @@ public struct AppSettings: Codable, Sendable {
         ]
         self.synthesisTemplates = try c.decodeIfPresent([SynthesisPromptTemplate].self, forKey: .synthesisTemplates) ?? SynthesisPromptTemplate.builtInPresets
         self.defaultSynthesisTemplateId = try c.decodeIfPresent(String.self, forKey: .defaultSynthesisTemplateId) ?? "tpl-knowledge-system"
+        self.folderSortOrder = try c.decodeIfPresent(SidebarSortOrder.self, forKey: .folderSortOrder) ?? .custom
+        self.tagSortOrder = try c.decodeIfPresent(SidebarSortOrder.self, forKey: .tagSortOrder) ?? .custom
     }
 
     public var activeProvider: AIProviderProfile {

@@ -71,6 +71,7 @@ public final class VaultManager {
     public var knowledgeRootURL: URL { vaultURL.appendingPathComponent("knowledge", isDirectory: true) }
     public var internalDirURL: URL { vaultURL.appendingPathComponent(".readbox", isDirectory: true) }
     public var foldersFileURL: URL { vaultURL.appendingPathComponent("folders.json") }
+    public var tagsFileURL: URL { vaultURL.appendingPathComponent("tags.json") }
     public var searchDBURL: URL { internalDirURL.appendingPathComponent("index.sqlite") }
 
     public func ensureStructure() {
@@ -122,6 +123,22 @@ public final class VaultManager {
     public func saveFolders(_ folders: [FolderItem]) {
         if let data = try? encoder.encode(folders) {
             try? data.write(to: foldersFileURL, options: .atomic)
+        }
+    }
+
+    // MARK: - Standalone Tags
+
+    public func loadTags() -> [TagItem] {
+        if let data = try? Data(contentsOf: tagsFileURL),
+           let loaded = try? decoder.decode([TagItem].self, from: data) {
+            return loaded.sorted { $0.sortOrder < $1.sortOrder }
+        }
+        return []
+    }
+
+    public func saveTags(_ tags: [TagItem]) {
+        if let data = try? encoder.encode(tags) {
+            try? data.write(to: tagsFileURL, options: .atomic)
         }
     }
 

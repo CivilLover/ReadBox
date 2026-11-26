@@ -191,19 +191,55 @@ public struct FolderItem: Identifiable, Codable, Hashable, Sendable {
     public var emoji: String
     public var parentId: String?
     public var sortOrder: Int
+    public var createdAt: Date
 
     public init(
         id: String = UUID().uuidString,
         name: String,
         emoji: String = "📁",
         parentId: String? = nil,
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        createdAt: Date = Date()
     ) {
         self.id = id
         self.name = name
         self.emoji = emoji
         self.parentId = parentId
         self.sortOrder = sortOrder
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, emoji, parentId, sortOrder, createdAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.emoji = try c.decodeIfPresent(String.self, forKey: .emoji) ?? "📁"
+        self.parentId = try c.decodeIfPresent(String.self, forKey: .parentId)
+        self.sortOrder = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        self.createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+    }
+}
+
+public struct TagItem: Identifiable, Codable, Hashable, Sendable {
+    public var id: String
+    public var name: String
+    public var sortOrder: Int
+    public var createdAt: Date
+
+    public init(
+        id: String = UUID().uuidString,
+        name: String,
+        sortOrder: Int = 0,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
     }
 }
 

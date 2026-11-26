@@ -10,6 +10,7 @@ public enum SidebarDestination: Hashable {
     case knowledgeBase
     case annotations
     case archived
+    case untagged
     case folder(String)
     case tag(String)
 }
@@ -20,9 +21,11 @@ public enum LibraryViewMode: String, CaseIterable {
 }
 
 public enum LibrarySortOrder: String, CaseIterable {
-    case newest = "从新到旧"
-    case oldest = "从旧到新"
-    case title = "按标题"
+    case newest = "按时间（从新到旧）"
+    case oldest = "按时间（从旧到新）"
+    case updated = "按更新时间"
+    case title = "按名称（A→Z）"
+    case highlights = "按标注数量"
 }
 
 public enum RightPanelTab: String, CaseIterable {
@@ -40,6 +43,7 @@ public final class AppState: ObservableObject {
 
     @Published public var settings: AppSettings
     @Published public var folders: [FolderItem] = []
+    @Published public var savedTags: [TagItem] = []
     @Published public var clips: [ClipItem] = []
     @Published public var knowledgeDocs: [KnowledgeDoc] = []
 
@@ -101,11 +105,28 @@ public final class AppState: ObservableObject {
         vault.ensureStructure()
         vault.seedWelcomeContentIfEmpty()
         folders = vault.loadFolders()
+        savedTags = vault.loadTags()
         clips = vault.loadAllClips()
         knowledgeDocs = vault.loadAllKnowledgeDocs()
+        syncSavedTagsFromClips()
         vault.rebuildSearchIndex(clips: clips, docs: knowledgeDocs)
         if activeKnowledgeDocId == nil {
             activeKnowledgeDocId = knowledgeDocs.first?.id
+        }
+    }
+
+    private func syncSavedTagsFromClips() {
+        var existingNames = Set(savedTags.map(\.name))
+        var changed = false
+        for clip in clips {
+            for t in clip.tags where !existingNames.contains(t) {
+                existingNames.insert(t)
+                savedTags.append(TagItem(name: t, sortOrder: savedTags.count, createdAt: clip.createdAt))
+                changed = true
+            }
+        }
+        if changed {
+            vault.saveTags(savedTags)
         }
     }
 
@@ -151,14 +172,42 @@ public final class AppState: ObservableObject {
         return knowledgeDocs.first(where: { $0.id == id })
     }
 
-    public var allTagsWithCount: [(tag: String, count: Int)] {
+    public var allTagsWithCount: [(tag: TagItem, count: Int)] {
         var counts: [String: Int] = [:]
         for clip in clips where !clip.isArchived {
             for t in clip.tags {
                 counts[t, default: 0] += 1
             }
         }
-        return counts.map { ($0.key, $0.value) }.sorted { $0.count > $1.count || ($0.count == $1.count && $0.tag < $1.tag) }
+        let merged: [(tag: TagItem, count: Int)] = savedTags.map { ($0, counts[$0.name] ?? 0) }
+        switch settings.tagSortOrder {
+        case .custom:
+            return merged.sorted { $0.tag.sortOrder < $1.tag.sortOrder }
+        case .name:
+            return merged.sorted { $0.tag.name.localizedStandardCompare($1.tag.name) == .orderedAscending }
+        case .createdAt:
+            return merged.sorted { $0.tag.createdAt > $1.tag.createdAt }
+        case .count:
+            return merged.sorted { $0.count > $1.count || ($0.count == $1.count && $0.tag.name.localizedStandardCompare($1.tag.name) == .orderedAscending) }
+        }
+    }
+
+    public func sortedFolders(parentId: String?) -> [FolderItem] {
+        let siblings = folders.filter { $0.parentId == parentId }
+        switch settings.folderSortOrder {
+        case .custom:
+            return siblings.sorted { $0.sortOrder < $1.sortOrder }
+        case .name:
+            return siblings.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .createdAt:
+            return siblings.sorted { $0.createdAt > $1.createdAt }
+        case .count:
+            return siblings.sorted {
+                let c0 = countForDestination(.folder($0.id))
+                let c1 = countForDestination(.folder($1.id))
+                return c0 > c1 || (c0 == c1 && $0.name.localizedStandardCompare($1.name) == .orderedAscending)
+            }
+        }
     }
 
     public var allHighlights: [(clip: ClipItem, highlight: HighlightItem)] {
@@ -180,6 +229,8 @@ public final class AppState: ObservableObject {
             result = clips.filter { $0.isStarred && !$0.isArchived }
         case .archived:
             result = clips.filter { $0.isArchived }
+        case .untagged:
+            result = clips.filter { !$0.isArchived && $0.tags.isEmpty }
         case .folder(let fid):
             let descendantIds = folderAndDescendantIds(for: fid)
             result = clips.filter { !$0.isArchived && ($0.folderId.map { descendantIds.contains($0) } ?? false) }
@@ -198,8 +249,12 @@ public final class AppState: ObservableObject {
             result.sort { $0.createdAt > $1.createdAt }
         case .oldest:
             result.sort { $0.createdAt < $1.createdAt }
+        case .updated:
+            result.sort { $0.updatedAt > $1.updatedAt }
         case .title:
-            result.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
+            result.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .highlights:
+            result.sort { $0.highlights.count > $1.highlights.count || ($0.highlights.count == $1.highlights.count && $0.createdAt > $1.createdAt) }
         }
         return result
     }
@@ -225,6 +280,7 @@ public final class AppState: ObservableObject {
         case .knowledgeBase: return knowledgeDocs.count
         case .annotations: return allHighlights.count
         case .archived: return clips.filter { $0.isArchived }.count
+        case .untagged: return clips.filter { !$0.isArchived && $0.tags.isEmpty }.count
         case .folder(let fid):
             let ids = folderAndDescendantIds(for: fid)
             return clips.filter { !$0.isArchived && ($0.folderId.map { ids.contains($0) } ?? false) }.count
@@ -420,6 +476,7 @@ public final class AppState: ObservableObject {
             clips[idx] = mutable
         }
         try? vault.saveClip(mutable)
+        syncSavedTagsFromClips()
     }
 
     public func deleteClip(_ clip: ClipItem) {
@@ -499,6 +556,78 @@ public final class AppState: ObservableObject {
         }
         if case .folder(let activeFid) = destination, removedIds.contains(activeFid) {
             destination = .inbox
+        }
+    }
+
+    // MARK: - Tags CRUD
+
+    public func createTag(name: String) {
+        let trimmed = name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard !trimmed.isEmpty else { return }
+        if savedTags.contains(where: { $0.name == trimmed }) {
+            showToast("标签 #\(trimmed) 已存在")
+            return
+        }
+        let item = TagItem(name: trimmed, sortOrder: savedTags.count, createdAt: Date())
+        savedTags.append(item)
+        vault.saveTags(savedTags)
+        showToast("已创建标签 #\(trimmed)")
+    }
+
+    public func renameTag(_ tag: TagItem, to newName: String) {
+        let trimmed = newName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard !trimmed.isEmpty, trimmed != tag.name else { return }
+        let oldName = tag.name
+        if let idx = savedTags.firstIndex(where: { $0.id == tag.id }) {
+            savedTags[idx].name = trimmed
+            vault.saveTags(savedTags)
+        }
+        for i in clips.indices {
+            if clips[i].tags.contains(oldName) {
+                clips[i].tags = clips[i].tags.map { $0 == oldName ? trimmed : $0 }
+                try? vault.saveClip(clips[i])
+            }
+        }
+        if case .tag(let active) = destination, active == oldName {
+            destination = .tag(trimmed)
+        }
+        showToast("已将标签重命名为 #\(trimmed)")
+    }
+
+    public func deleteTag(_ tag: TagItem) {
+        savedTags.removeAll { $0.id == tag.id }
+        vault.saveTags(savedTags)
+        for i in clips.indices {
+            if clips[i].tags.contains(tag.name) {
+                clips[i].tags.removeAll { $0 == tag.name }
+                try? vault.saveClip(clips[i])
+            }
+        }
+        if case .tag(let active) = destination, active == tag.name {
+            destination = .all
+        }
+        showToast("已删除标签 #\(tag.name)")
+    }
+
+    public func addTag(_ tagName: String, toClipIds ids: [String]) {
+        var updatedCount = 0
+        for id in ids {
+            if var c = clips.first(where: { $0.id == id }), !c.tags.contains(tagName) {
+                c.tags.append(tagName)
+                updateClip(c)
+                updatedCount += 1
+            }
+        }
+        if updatedCount > 0 {
+            if !savedTags.contains(where: { $0.name == tagName }) {
+                savedTags.append(TagItem(name: tagName, sortOrder: savedTags.count, createdAt: Date()))
+                vault.saveTags(savedTags)
+            }
+            showToast("已为 \(updatedCount) 篇收藏添加标签 #\(tagName)")
         }
     }
 

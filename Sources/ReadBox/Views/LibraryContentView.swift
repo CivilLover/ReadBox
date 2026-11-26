@@ -12,6 +12,7 @@ public struct LibraryContentView: View {
         case .unread: return "未读文章"
         case .starred: return "星标精选"
         case .archived: return "已归档"
+        case .untagged: return "无标签"
         case .folder(let fid):
             if let f = appState.folders.first(where: { $0.id == fid }) {
                 return "\(f.emoji) \(f.name)"

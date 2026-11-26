@@ -6,6 +6,12 @@ public struct SidebarView: View {
     @State private var newFolderName = ""
     @State private var newFolderEmoji = "📁"
     @State private var newFolderParentId: String? = nil
+
+    @State private var showNewTagPopover = false
+    @State private var newTagName = ""
+    @State private var renamingTag: TagItem? = nil
+    @State private var renameTagDraft = ""
+
     @State private var expandedFolderIds: Set<String> = ["folder-tech"]
     @State private var dropTargetedDestination: SidebarDestination? = nil
 
@@ -36,45 +42,106 @@ public struct SidebarView: View {
                     }
                 }
 
+                // Folders section with Sort Menu + New Folder ⊕ (Cubox style)
                 Section {
-                    let topFolders = appState.folders.filter { $0.parentId == nil }
+                    let topFolders = appState.sortedFolders(parentId: nil)
                     ForEach(topFolders) { folder in
                         folderTreeRow(folder, depth: 0)
                     }
                 } header: {
-                    HStack {
-                        Text("收藏夹（可拖入归类）")
+                    HStack(spacing: 6) {
+                        Text("收藏夹")
                         Spacer()
+
+                        Menu {
+                            Text("收藏夹排序")
+                            Divider()
+                            ForEach(SidebarSortOrder.allCases, id: \.self) { order in
+                                Button {
+                                    appState.settings.folderSortOrder = order
+                                    appState.saveSettings()
+                                } label: {
+                                    HStack {
+                                        Text(order.displayName)
+                                        if appState.settings.folderSortOrder == order {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("收藏夹排序")
+
                         Button {
                             newFolderParentId = nil
                             newFolderName = ""
                             newFolderEmoji = "📁"
                             showNewFolderPopover = true
                         } label: {
-                            Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
                         .help("新建收藏夹")
                     }
                 }
 
-                if !appState.allTagsWithCount.isEmpty {
-                    Section("标签") {
-                        ForEach(appState.allTagsWithCount, id: \.tag) { item in
-                            HStack(spacing: 8) {
-                                Text("#")
-                                    .foregroundStyle(.secondary)
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text(item.tag)
-                                    .lineLimit(1)
-                                Spacer()
-                                Text("\(item.count)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                // Tags section with Sort Menu + New Tag ⊕ + ⊘ 无标签 + Drag-to-Tag
+                Section {
+                    navRow(.untagged, title: "无标签", icon: "nosign", tint: .secondary)
+
+                    ForEach(appState.allTagsWithCount, id: \.tag.id) { item in
+                        tagRow(item.tag, count: item.count)
+                    }
+                } header: {
+                    HStack(spacing: 6) {
+                        Text("标签")
+                        Spacer()
+
+                        Menu {
+                            Text("标签排序")
+                            Divider()
+                            ForEach(SidebarSortOrder.allCases, id: \.self) { order in
+                                Button {
+                                    appState.settings.tagSortOrder = order
+                                    appState.saveSettings()
+                                } label: {
+                                    HStack {
+                                        Text(order.displayName)
+                                        if appState.settings.tagSortOrder == order {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
                             }
-                            .tag(SidebarDestination.tag(item.tag))
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(.secondary)
                         }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("标签排序")
+
+                        Button {
+                            newTagName = ""
+                            showNewTagPopover = true
+                        } label: {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("新建标签")
                     }
                 }
             }
@@ -158,6 +225,42 @@ public struct SidebarView: View {
             .padding(14)
             .frame(width: 260)
         }
+        .popover(isPresented: $showNewTagPopover) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("新建标签")
+                    .font(.headline)
+                TextField("输入标签名称（如 AI、产品思考）", text: $newTagName)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { commitNewTag() }
+                HStack {
+                    Spacer()
+                    Button("取消") { showNewTagPopover = false }
+                    Button("创建") { commitNewTag() }
+                        .readBoxGlassButton(prominent: true)
+                        .disabled(newTagName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .padding(14)
+            .frame(width: 250)
+        }
+        .sheet(item: $renamingTag) { tag in
+            VStack(alignment: .leading, spacing: 12) {
+                Text("重命名标签 #\(tag.name)")
+                    .font(.headline)
+                TextField("新标签名称", text: $renameTagDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { commitRenameTag(tag) }
+                HStack {
+                    Spacer()
+                    Button("取消") { renamingTag = nil }
+                    Button("保存") { commitRenameTag(tag) }
+                        .readBoxGlassButton(prominent: true)
+                        .disabled(renameTagDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .padding(18)
+            .frame(width: 280)
+        }
     }
 
     private func commitNewFolder() {
@@ -166,6 +269,16 @@ public struct SidebarView: View {
             expandedFolderIds.insert(pid)
         }
         showNewFolderPopover = false
+    }
+
+    private func commitNewTag() {
+        appState.createTag(name: newTagName)
+        showNewTagPopover = false
+    }
+
+    private func commitRenameTag(_ tag: TagItem) {
+        appState.renameTag(tag, to: renameTagDraft)
+        renamingTag = nil
     }
 
     private func parseDroppedClipIds(_ items: [String]) -> [String] {
@@ -220,8 +333,66 @@ public struct SidebarView: View {
             }
     }
 
+    @ViewBuilder
+    private func tagRow(_ tag: TagItem, count: Int) -> some View {
+        let dest = SidebarDestination.tag(tag.name)
+        let isTargeted = dropTargetedDestination == dest
+        HStack(spacing: 8) {
+            Text("#")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 16)
+            Text(tag.name)
+                .lineLimit(1)
+            Spacer()
+            if count > 0 {
+                Text("\(count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isTargeted ? Color.accentColor.opacity(0.26) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isTargeted ? Color.accentColor : Color.clear, lineWidth: 1.5)
+        )
+        .tag(dest)
+        .dropDestination(for: String.self) { items, _ in
+            let ids = parseDroppedClipIds(items)
+            guard !ids.isEmpty else { return false }
+            appState.addTag(tag.name, toClipIds: ids)
+            return true
+        } isTargeted: { targeting in
+            withAnimation(.easeOut(duration: 0.12)) {
+                if targeting { dropTargetedDestination = dest }
+                else if dropTargetedDestination == dest { dropTargetedDestination = nil }
+            }
+        }
+        .contextMenu {
+            Button("重命名标签…") {
+                renameTagDraft = tag.name
+                renamingTag = tag
+            }
+            Button("✨ AI 归纳此标签文章沉淀为知识库") {
+                let ids = appState.clips.filter { !$0.isArchived && $0.tags.contains(tag.name) }.map(\.id)
+                appState.synthesisTargetClipIds = ids
+                appState.showSynthesisSheet = true
+            }
+            Divider()
+            Button("删除标签", role: .destructive) {
+                appState.deleteTag(tag)
+            }
+        }
+    }
+
     private func folderTreeRow(_ folder: FolderItem, depth: Int) -> AnyView {
-        let children = appState.folders.filter { $0.parentId == folder.id }
+        let children = appState.sortedFolders(parentId: folder.id)
         let isExpanded = expandedFolderIds.contains(folder.id)
         let count = appState.countForDestination(.folder(folder.id))
         let dest = SidebarDestination.folder(folder.id)
